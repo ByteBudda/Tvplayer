@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
@@ -116,7 +117,25 @@ fun VideoPlayer(
             else -> Uri.parse(streamUrl)
         }
 
-        val mediaItem = MediaItem.fromUri(mediaUri)
+        val lowUrl = streamUrl.lowercase()
+        val mediaItem = when {
+            lowUrl.contains(".m3u8") || lowUrl.contains("m3u8") -> {
+                MediaItem.Builder()
+                    .setUri(mediaUri)
+                    .setMimeType(MimeTypes.APPLICATION_M3U8)
+                    .build()
+            }
+            lowUrl.contains(".rtsp") || streamUrl.startsWith("rtsp://") -> {
+                MediaItem.Builder()
+                    .setUri(mediaUri)
+                    .setMimeType(MimeTypes.APPLICATION_RTSP)
+                    .build()
+            }
+            else -> {
+                MediaItem.fromUri(mediaUri)
+            }
+        }
+
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
         exoPlayer.play()
@@ -178,6 +197,9 @@ fun VideoPlayer(
                 modifier = Modifier.fillMaxSize(),
                 update = { view ->
                     view.player = exoPlayer
+                },
+                onRelease = { view ->
+                    view.player = null
                 }
             )
 

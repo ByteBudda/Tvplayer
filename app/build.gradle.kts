@@ -92,6 +92,8 @@ dependencies {
   implementation(libs.androidx.room.runtime)
   implementation(libs.coil.compose)
   implementation(libs.media3.exoplayer)
+  implementation(libs.media3.exoplayer.hls)
+  implementation(libs.media3.exoplayer.rtsp)
   implementation(libs.media3.ui)
   implementation(libs.converter.moshi)
   // implementation(libs.firebase.ai)
