@@ -1,0 +1,6 @@
+{
+  "name": "IPTV Player",
+  "description": "IPTV Player with built-in playlists, recording, parental lock, and catch-up archive",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
