@@ -1,15 +1,22 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -21,11 +28,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import android.view.KeyEvent
 import coil.compose.AsyncImage
 import com.example.data.Channel
 import com.example.data.ProgramEpisode
@@ -59,9 +69,17 @@ fun PlayerScreen(
     var pinError by remember { mutableStateOf(false) }
 
     // Full-screen toggle state
-    var isFullscreen by remember { mutableStateOf(false) }
+    val isFullscreen by viewModel.isFullscreen.collectAsState()
+    // Local visibility for fullscreen overlays
+    var showFullscreenEpg by remember { mutableStateOf(false) }
+    var showFullscreenChannels by remember { mutableStateOf(false) }
     // EPG Accordion/Spoiler toggle state
     var isEpgExpanded by remember { mutableStateOf(false) }
+
+    // Sync local fullscreen state to ViewModel for platform-level system bar control
+    LaunchedEffect(isFullscreen) {
+        viewModel.setFullscreen(isFullscreen)
+    }
 
     // Filter channels based on chosen category
     val filteredChannels = remember(channels, selectedCategory) {
@@ -101,14 +119,65 @@ fun PlayerScreen(
         }
     }
 
+    // Handle back press to exit overlays or fullscreen
+    BackHandler(enabled = isFullscreen) {
+        if (showFullscreenEpg) {
+            showFullscreenEpg = false
+        } else if (showFullscreenChannels) {
+            showFullscreenChannels = false
+        } else {
+            viewModel.setFullscreen(false)
+        }
+    }
+
     if (isFullscreen) {
-        // FULLSCREEN PLAY MODE ONLY
+        // FULLSCREEN PLAY MODE
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(Color.Black)
+                .pointerInput(Unit) {
+                    detectVerticalDragGestures { change, dragAmount ->
+                        change.consume()
+                        if (dragAmount < -20) { // Swipe Up
+                            showFullscreenChannels = true
+                            showFullscreenEpg = false
+                        } else if (dragAmount > 20) { // Swipe Down
+                            showFullscreenEpg = true
+                            showFullscreenChannels = false
+                        }
+                    }
+                }
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown) {
+                        when (keyEvent.nativeKeyEvent.keyCode) {
+                            KeyEvent.KEYCODE_DPAD_UP -> {
+                                showFullscreenEpg = true
+                                showFullscreenChannels = false
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                showFullscreenChannels = true
+                                showFullscreenEpg = false
+                                true
+                            }
+                            KeyEvent.KEYCODE_BACK -> {
+                                if (showFullscreenEpg || showFullscreenChannels) {
+                                    showFullscreenEpg = false
+                                    showFullscreenChannels = false
+                                    true
+                                } else {
+                                    false
+                                }
+                            }
+                            else -> false
+                        }
+                    } else false
+                }
+                .focusable()
         ) {
             val isCurrentRecording = selectedChannel?.let { viewModel.activeRecordingUrls.value.contains(it.streamUrl) } ?: false
+            
             VideoPlayer(
                 streamUrl = when (playMode) {
                     is AppViewModel.PlayMediaMode.RecordingPlay -> (playMode as AppViewModel.PlayMediaMode.RecordingPlay).recording.streamUrl
@@ -128,12 +197,132 @@ fun PlayerScreen(
                 mode = playMode,
                 isRecording = isCurrentRecording,
                 isFullscreen = true,
-                onToggleFullscreen = { isFullscreen = false },
+                onToggleFullscreen = { viewModel.setFullscreen(false) },
                 onPreviousChannel = onPreviousChannel,
                 onNextChannel = onNextChannel,
                 modifier = Modifier.fillMaxSize(),
                 onToggleRecording = { viewModel.toggleRecordingActiveChannel() }
             )
+
+            // OVERLAY: Program Info (EPG) - Shown on Key UP / Swipe Down
+            AnimatedVisibility(
+                visible = showFullscreenEpg,
+                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                modifier = Modifier.align(Alignment.TopCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 300.dp)
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .clickable { showFullscreenEpg = false }
+                        .padding(24.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            text = "Программа передач: ${selectedChannel?.name}",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = CinemaAmber,
+                            fontWeight = FontWeight.Bold
+                        )
+                        LazyColumn(modifier = Modifier.weight(1f)) {
+                            items(archiveSchedule) { program ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(
+                                        text = program.startTimeString,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = SkyBlue,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = program.title,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = Color.White
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // OVERLAY: Channel List - Shown on Key DOWN / Swipe Up
+            AnimatedVisibility(
+                visible = showFullscreenChannels,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                modifier = Modifier.align(Alignment.BottomCenter)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(bottom = 16.dp)
+                ) {
+                    Column {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Выбор канала", color = Color.White, style = MaterialTheme.typography.titleLarge)
+                            IconButton(onClick = { showFullscreenChannels = false }) {
+                                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                            }
+                        }
+                        
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(minSize = 160.dp),
+                            contentPadding = PaddingValues(16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            items(filteredChannels) { channel ->
+                                val isNowSelected = selectedChannel?.id == channel.id
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { 
+                                            viewModel.selectChannel(channel)
+                                            showFullscreenChannels = false
+                                        },
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (isNowSelected) SlateFocus else SlateCard.copy(alpha = 0.6f)
+                                    ),
+                                    border = BorderStroke(1.dp, if (isNowSelected) CinemaAmber else Color.White.copy(alpha = 0.1f))
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AsyncImage(
+                                            model = channel.logoUrl,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(4.dp))
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = channel.name,
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     } else {
         // NORMAL PORTRAIT VIEW MODE WITH THE CHANNELS LISTING & EXPANDABLE SPOILER
@@ -164,7 +353,7 @@ fun PlayerScreen(
                 mode = playMode,
                 isRecording = isCurrentRecording,
                 isFullscreen = false,
-                onToggleFullscreen = { isFullscreen = true },
+                onToggleFullscreen = { viewModel.setFullscreen(true) },
                 onPreviousChannel = onPreviousChannel,
                 onNextChannel = onNextChannel,
                 modifier = Modifier.fillMaxWidth(),

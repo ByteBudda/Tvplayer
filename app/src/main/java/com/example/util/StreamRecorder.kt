@@ -24,6 +24,9 @@ object StreamRecorder {
     private val _recordingUrls = MutableStateFlow<Set<String>>(emptySet())
     val recordingUrls: StateFlow<Set<String>> = _recordingUrls.asStateFlow()
 
+    // Map of recordingId to URL so we can clear on completion/error/cancellation
+    private val jobUrls = java.util.concurrent.ConcurrentHashMap<Long, String>()
+
     fun startRecording(
         context: Context,
         channelName: String,
@@ -49,6 +52,7 @@ object StreamRecorder {
                 val id = dao.insertRecording(newRecording)
                 
                 // Mark as active
+                jobUrls[id] = streamUrl
                 _recordingUrls.value = _recordingUrls.value + streamUrl
                 onRecordingStarted(id)
 
@@ -58,36 +62,36 @@ object StreamRecorder {
                     var connection: HttpURLConnection? = null
                     var bytesWritten = 0L
                     val startTime = System.currentTimeMillis()
+                    var successCompletion = false
 
                     try {
                         outStream = FileOutputStream(file)
                         
-                        // We will resolve play links, some could be m3u8 playlists.
-                        // For demonstration and feasibility in offline tests/offline recording of TV,
-                        // we stream the bytes of the source URL.
                         val url = URL(streamUrl)
                         connection = url.openConnection() as HttpURLConnection
-                        connection.connectTimeout = 10000
-                        connection.readTimeout = 15000
-                        connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                        connection.connectTimeout = 30000
+                        connection.readTimeout = 30000
+                        connection.instanceFollowRedirects = true
+                        connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
                         
                         val responseCode = connection.responseCode
+                        Log.d(TAG, "Recording $channelName: Response code $responseCode")
                         if (responseCode in 200..299) {
                             val inStream = connection.inputStream
-                            val buffer = ByteArray(16384) // 16kb chunks
+                            val buffer = ByteArray(65536) // 64kb chunks
                             var bytesRead: Int
                             
                             while (isActive) {
                                 bytesRead = inStream.read(buffer)
                                 if (bytesRead == -1) {
-                                    // Stream finished
+                                    successCompletion = true
                                     break
                                 }
                                 outStream.write(buffer, 0, bytesRead)
                                 bytesWritten += bytesRead
                                 
-                                // Periodically update database record with size and current duration (every 3MB or so)
-                                if (bytesWritten % (1024 * 1024 * 3) == 0L) {
+                                // Periodically update database record with size and current duration (every 4MB or so)
+                                if (bytesWritten % (1024 * 1024 * 4) == 0L) {
                                     val currentDuration = System.currentTimeMillis() - startTime
                                     val updated = Recording(
                                         id = id,
@@ -104,37 +108,9 @@ object StreamRecorder {
                             }
                         } else {
                             Log.e(TAG, "Server returned response code $responseCode")
-                            throw Exception("HTTP error code: $responseCode")
                         }
-                        
-                        // Completed successfully
-                        val duration = System.currentTimeMillis() - startTime
-                        val completedRecording = Recording(
-                            id = id,
-                            channelName = channelName,
-                            streamUrl = streamUrl,
-                            startTime = timestamp,
-                            durationMs = duration,
-                            filePath = file.absolutePath,
-                            fileSize = file.length(),
-                            status = "Completed"
-                        )
-                        dao.updateRecording(completedRecording)
-                        
                     } catch (e: Exception) {
                         Log.e(TAG, "Recording error for $channelName", e)
-                        val duration = System.currentTimeMillis() - startTime
-                        val failedRecording = Recording(
-                            id = id,
-                            channelName = channelName,
-                            streamUrl = streamUrl,
-                            startTime = timestamp,
-                            durationMs = duration,
-                            filePath = file.absolutePath,
-                            fileSize = file.length(),
-                            status = if (file.length() > 1024) "Completed" else "Failed" // If we got some bytes, mark index completed
-                        )
-                        dao.updateRecording(failedRecording)
                     } finally {
                         try {
                             outStream?.close()
@@ -142,6 +118,33 @@ object StreamRecorder {
                         try {
                             connection?.disconnect()
                         } catch (e: Exception) {}
+
+                        // Clean up state and write database state robustly even if cancelled
+                        withContext(NonCancellable) {
+                            _recordingUrls.value = _recordingUrls.value - streamUrl
+                            activeJobs.remove(id)
+                            jobUrls.remove(id)
+
+                            val duration = System.currentTimeMillis() - startTime
+                            val size = file.length()
+                            
+                            // If we have downloaded more than 10KB, mark completed, otherwise failed
+                            val isSufficientSize = size > 10 * 1024
+                            val finalStatus = if (isSufficientSize) "Completed" else "Failed"
+
+                            val completedRecording = Recording(
+                                id = id,
+                                channelName = channelName,
+                                streamUrl = streamUrl,
+                                startTime = timestamp,
+                                durationMs = duration,
+                                filePath = file.absolutePath,
+                                fileSize = size,
+                                status = finalStatus
+                            )
+                            dao.updateRecording(completedRecording)
+                            Log.i(TAG, "Finished recording task for $channelName, status: $finalStatus, size: $size bytes")
+                        }
                     }
                 }
                 
@@ -155,18 +158,14 @@ object StreamRecorder {
 
     fun stopRecording(id: Long, dao: AppDao) {
         scope.launch {
+            val streamUrl = jobUrls[id]
+            if (streamUrl != null) {
+                _recordingUrls.value = _recordingUrls.value - streamUrl
+            }
             val job = activeJobs.remove(id)
             if (job != null) {
                 job.cancelAndJoin()
             }
-            
-            // Retrieve recording to update status
-            val flow = dao.getAllRecordingsFlow()
-            // We can search the database directly or just do a quick clean up.
-            // Let's ensure the status is update to Completed if it was Recording
-            // It will be updated by the coroutine's cancellation/finally handler,
-            // but let's reinforce it here just in case.
-            delay(500) // Wait briefly for job cancellation to write DB
         }
     }
     
@@ -174,8 +173,13 @@ object StreamRecorder {
         scope.launch {
             _recordingUrls.value = _recordingUrls.value - streamUrl
             // Find and cancel jobs for this streamUrl
-            // For safety, cancel any job in activeJobs that corresponds to this url
-            // We can query active recordings and stop them.
+            val idToCancel = jobUrls.entries.find { it.value == streamUrl }?.key
+            if (idToCancel != null) {
+                val job = activeJobs.remove(idToCancel)
+                if (job != null) {
+                    job.cancelAndJoin()
+                }
+            }
         }
     }
 

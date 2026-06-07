@@ -22,6 +22,14 @@ import com.example.ui.screens.PlaylistsScreen
 import com.example.ui.screens.RecordingsScreen
 import com.example.ui.theme.MyApplicationTheme
 
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,6 +38,19 @@ class MainActivity : ComponentActivity() {
             MyApplicationTheme {
                 val viewModel: AppViewModel = viewModel()
                 val currentScreen by viewModel.currentScreen.collectAsState()
+                val isFullscreen by viewModel.isFullscreen.collectAsState()
+
+                val context = LocalContext.current
+                LaunchedEffect(isFullscreen) {
+                    val window = (context as? android.app.Activity)?.window ?: return@LaunchedEffect
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    if (isFullscreen) {
+                        controller.hide(WindowInsetsCompat.Type.systemBars())
+                        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    } else {
+                        controller.show(WindowInsetsCompat.Type.systemBars())
+                    }
+                }
 
                 // Check responsiveness based on screen configurations
                 val configuration = LocalConfiguration.current
@@ -38,7 +59,7 @@ class MainActivity : ComponentActivity() {
                 Scaffold(
                     modifier = Modifier.fillMaxSize(),
                     bottomBar = {
-                        if (!isExpanded) {
+                        if (!isExpanded && !isFullscreen) {
                             AdaptiveBottomBar(
                                 currentScreen = currentScreen,
                                 onNavigate = { viewModel.navigateTo(it) }
@@ -49,9 +70,9 @@ class MainActivity : ComponentActivity() {
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
+                            .padding(if (isFullscreen) PaddingValues(0.dp) else innerPadding)
                     ) {
-                        if (isExpanded) {
+                        if (isExpanded && !isFullscreen) {
                             AdaptiveNavigationRail(
                                 currentScreen = currentScreen,
                                 onNavigate = { viewModel.navigateTo(it) }

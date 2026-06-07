@@ -62,6 +62,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _isParentalSessionUnlocked = MutableStateFlow(false)
     val isParentalSessionUnlocked: StateFlow<Boolean> = _isParentalSessionUnlocked.asStateFlow()
 
+    // Full-screen state flow for edge-to-edge player visibility
+    private val _isFullscreen = MutableStateFlow(false)
+    val isFullscreen: StateFlow<Boolean> = _isFullscreen.asStateFlow()
+
+    fun setFullscreen(enabled: Boolean) {
+        _isFullscreen.value = enabled
+    }
+
     // Active media source mode: direct stream, recording, or archive timeshift
     sealed interface PlayMediaMode {
         data object DirectLive : PlayMediaMode
