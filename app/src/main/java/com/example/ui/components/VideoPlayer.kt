@@ -64,81 +64,111 @@ fun VideoPlayer(
         label = "pulse_alpha"
     )
 
-    // Instantiate ExoPlayer
-    val exoPlayer = remember {
-        ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
-            repeatMode = Player.REPEAT_MODE_OFF
+    // Instantiate ExoPlayer safely with try-catch
+    val exoPlayer = remember(context) {
+        try {
+            ExoPlayer.Builder(context.applicationContext).build().apply {
+                playWhenReady = true
+                repeatMode = Player.REPEAT_MODE_OFF
+            }
+        } catch (e: Throwable) {
+            Log.e("VideoPlayer", "Failed to build ExoPlayer instance", e)
+            null
         }
     }
 
-    // Set up Player listeners
+    // Set up Player listeners safely
     DisposableEffect(exoPlayer) {
-        val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(state: Int) {
-                isPlaying = exoPlayer.isPlaying
-                isLoading = state == Player.STATE_BUFFERING
-                hasError = false
-            }
+        val player = exoPlayer
+        if (player == null) {
+            onDispose {}
+        } else {
+            val listener = object : Player.Listener {
+                override fun onPlaybackStateChanged(state: Int) {
+                    isPlaying = player.isPlaying
+                    isLoading = state == Player.STATE_BUFFERING
+                    hasError = false
+                }
 
-            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
-                Log.e("VideoPlayer", "Player error occur", error)
-                hasError = true
-                isLoading = false
-            }
+                override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                    Log.e("VideoPlayer", "Player error occur", error)
+                    hasError = true
+                    isLoading = false
+                }
 
-            override fun onIsPlayingChanged(playing: Boolean) {
-                isPlaying = playing
+                override fun onIsPlayingChanged(playing: Boolean) {
+                    isPlaying = playing
+                }
             }
-        }
-        exoPlayer.addListener(listener)
-        onDispose {
-            exoPlayer.removeListener(listener)
-            exoPlayer.release()
+            try {
+                player.addListener(listener)
+            } catch (e: Throwable) {
+                Log.e("VideoPlayer", "Failed to add listener", e)
+            }
+            onDispose {
+                try {
+                    player.removeListener(listener)
+                    player.stop()
+                    player.release()
+                } catch (e: Throwable) {
+                    Log.e("VideoPlayer", "Error releasing player", e)
+                }
+            }
         }
     }
 
-    // Prepare and play the URI based on URL / File path
-    LaunchedEffect(streamUrl, mode) {
+    // Prepare and play the URI based on URL / File path safely
+    LaunchedEffect(streamUrl, mode, exoPlayer) {
+        val player = exoPlayer ?: return@LaunchedEffect
         if (streamUrl.isNullOrEmpty()) {
-            exoPlayer.stop()
+            try {
+                player.stop()
+            } catch (e: Throwable) {
+                Log.e("VideoPlayer", "Error stopping player", e)
+            }
             return@LaunchedEffect
         }
 
         hasError = false
         isLoading = true
 
-        val mediaUri = when (mode) {
-            is AppViewModel.PlayMediaMode.RecordingPlay -> {
-                // Play local file
-                val file = File(mode.recording.filePath)
-                if (file.exists()) Uri.fromFile(file) else Uri.parse(streamUrl)
+        try {
+            val mediaUri = when (mode) {
+                is AppViewModel.PlayMediaMode.RecordingPlay -> {
+                    // Play local file
+                    val file = File(mode.recording.filePath)
+                    if (file.exists()) Uri.fromFile(file) else Uri.parse(streamUrl)
+                }
+                else -> Uri.parse(streamUrl)
             }
-            else -> Uri.parse(streamUrl)
-        }
 
-        val lowUrl = streamUrl.lowercase()
-        val mediaItem = when {
-            lowUrl.contains(".m3u8") || lowUrl.contains("m3u8") -> {
-                MediaItem.Builder()
-                    .setUri(mediaUri)
-                    .setMimeType(MimeTypes.APPLICATION_M3U8)
-                    .build()
+            val lowUrl = streamUrl.lowercase()
+            val mediaItem = when {
+                lowUrl.contains(".m3u8") || lowUrl.contains("m3u8") -> {
+                    MediaItem.Builder()
+                        .setUri(mediaUri)
+                        .setMimeType(MimeTypes.APPLICATION_M3U8)
+                        .build()
+                }
+                lowUrl.contains(".rtsp") || streamUrl.startsWith("rtsp://") -> {
+                    MediaItem.Builder()
+                        .setUri(mediaUri)
+                        .setMimeType(MimeTypes.APPLICATION_RTSP)
+                        .build()
+                }
+                else -> {
+                    MediaItem.fromUri(mediaUri)
+                }
             }
-            lowUrl.contains(".rtsp") || streamUrl.startsWith("rtsp://") -> {
-                MediaItem.Builder()
-                    .setUri(mediaUri)
-                    .setMimeType(MimeTypes.APPLICATION_RTSP)
-                    .build()
-            }
-            else -> {
-                MediaItem.fromUri(mediaUri)
-            }
-        }
 
-        exoPlayer.setMediaItem(mediaItem)
-        exoPlayer.prepare()
-        exoPlayer.play()
+            player.setMediaItem(mediaItem)
+            player.prepare()
+            player.play()
+        } catch (e: Throwable) {
+            Log.e("VideoPlayer", "Error preparing or playing media: $streamUrl", e)
+            hasError = true
+            isLoading = false
+        }
     }
 
     Box(
@@ -180,28 +210,73 @@ fun VideoPlayer(
                 )
             }
         } else {
-            // Android View hosting the ExoPlayer PlayerView
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = exoPlayer
-                        useController = true
-                        // Custom styling to fit Cinema Dark theme
-                        setBackgroundColor(android.graphics.Color.BLACK)
-                        layoutParams = ViewGroup.LayoutParams(
-                            ViewGroup.LayoutParams.MATCH_PARENT,
-                            ViewGroup.LayoutParams.MATCH_PARENT
-                        )
-                    }
-                },
-                modifier = Modifier.fillMaxSize(),
-                update = { view ->
-                    view.player = exoPlayer
-                },
-                onRelease = { view ->
-                    view.player = null
+            if (exoPlayer == null) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(Color(0xFF14171E), Color(0xFF090A0D))
+                            )
+                        ),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Error,
+                        contentDescription = "Ошибка инициализации",
+                        tint = LiveRed,
+                        modifier = Modifier.size(64.dp)
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "Ошибка инициализации плеера",
+                        color = Color.White.copy(alpha = 0.8f),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "Проблема с загрузкой аппаратного декодера",
+                        color = Color.White.copy(alpha = 0.5f),
+                        style = MaterialTheme.typography.bodyMedium
+                    )
                 }
-            )
+            } else {
+                // Android View hosting the ExoPlayer PlayerView safely
+                AndroidView(
+                    factory = { ctx ->
+                        try {
+                            PlayerView(ctx).apply {
+                                player = exoPlayer
+                                useController = true
+                                setBackgroundColor(android.graphics.Color.BLACK)
+                                layoutParams = ViewGroup.LayoutParams(
+                                    ViewGroup.LayoutParams.MATCH_PARENT,
+                                    ViewGroup.LayoutParams.MATCH_PARENT
+                                )
+                            }
+                        } catch (e: Throwable) {
+                            Log.e("VideoPlayer", "Error constructing PlayerView", e)
+                            PlayerView(ctx)
+                        }
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    update = { view ->
+                        try {
+                            view.player = exoPlayer
+                        } catch (e: Throwable) {
+                            Log.e("VideoPlayer", "Error updating PlayerView player", e)
+                        }
+                    },
+                    onRelease = { view ->
+                        try {
+                            view.player = null
+                        } catch (e: Throwable) {
+                            Log.e("VideoPlayer", "Error releasing PlayerView player", e)
+                        }
+                    }
+                )
+            }
 
             // Dynamic Playback Overlay HUD
             Box(

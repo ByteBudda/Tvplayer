@@ -69,7 +69,8 @@ fun PlayerScreen(
     // Auto-select first channel on launch if nothing is selected
     LaunchedEffect(channels) {
         if (selectedChannel == null && channels.isNotEmpty()) {
-            viewModel.selectChannel(channels.first { !it.isLocked || !parentalEnabled })
+            val nonLockedChannel = channels.firstOrNull { !it.isLocked || !parentalEnabled }
+            viewModel.selectChannel(nonLockedChannel ?: channels.first())
         }
     }
 
@@ -85,9 +86,13 @@ fun PlayerScreen(
             streamUrl = when (playMode) {
                 is AppViewModel.PlayMediaMode.RecordingPlay -> (playMode as AppViewModel.PlayMediaMode.RecordingPlay).recording.streamUrl
                 is AppViewModel.PlayMediaMode.ArchivePlay -> {
-                    // Append archive trigger time parameter typically used in catch-up systems
-                    val archiveTs = (playMode as AppViewModel.PlayMediaMode.ArchivePlay).episode.startTimeMs / 1000
-                    "${selectedChannel?.streamUrl}?utc=$archiveTs"
+                    val base = selectedChannel?.streamUrl
+                    if (base != null) {
+                        val archiveTs = (playMode as AppViewModel.PlayMediaMode.ArchivePlay).episode.startTimeMs / 1000
+                        "$base?utc=$archiveTs"
+                    } else {
+                        null
+                    }
                 }
                 is AppViewModel.PlayMediaMode.DirectLive -> selectedChannel?.streamUrl
             },

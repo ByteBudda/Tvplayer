@@ -74,7 +74,9 @@ class AppRepository(
                 val parsedChannels = IptvParser.parseM3u(playlistId, content)
                 if (parsedChannels.isNotEmpty()) {
                     appDao.deleteChannelsByPlaylist(playlistId)
-                    appDao.insertChannels(parsedChannels)
+                    parsedChannels.chunked(100).forEach { chunk ->
+                        appDao.insertChannels(chunk)
+                    }
                 } else if (playlist.isBuiltIn) {
                     insertMockChannelsForPlaylist(playlistId)
                 }
@@ -83,7 +85,9 @@ class AppRepository(
                 val result = IptvParser.parseXml(playlistId, content)
                 if (result.channels.isNotEmpty()) {
                     appDao.deleteChannelsByPlaylist(playlistId)
-                    appDao.insertChannels(result.channels)
+                    result.channels.chunked(100).forEach { chunk ->
+                        appDao.insertChannels(chunk)
+                    }
                 } else if (playlist.isBuiltIn) {
                     insertMockChannelsForPlaylist(playlistId)
                 }

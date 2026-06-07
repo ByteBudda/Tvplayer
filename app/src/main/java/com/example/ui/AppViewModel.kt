@@ -77,21 +77,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             _parentalEnabled.value = repository.isParentalControlEnabled()
             _parentalPin.value = repository.getParentalPin()
 
-            // Preload default built-in playlist if there are no playlists
-            repository.playlists.collectLatest { list ->
+            // Preload default built-in playlist if there are no playlists (safe one-shot check on startup)
+            try {
+                val list = repository.playlists.first()
                 if (list.isEmpty()) {
                     _isRefreshing.value = true
-                    try {
-                        repository.addBuiltInPlaylist(
-                            name = "Стабильный Эфир ТВ",
-                            url = "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVstable.m3u8"
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed seeding built-in list", e)
-                    } finally {
-                        _isRefreshing.value = false
-                    }
+                    repository.addBuiltInPlaylist(
+                        name = "Стабильный Эфир ТВ",
+                        url = "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVstable.m3u8"
+                    )
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed seeding built-in list", e)
+            } finally {
+                _isRefreshing.value = false
             }
         }
 

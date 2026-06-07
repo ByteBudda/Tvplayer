@@ -15,14 +15,16 @@ object IptvParser {
 
     fun parseM3u(playlistId: Long, m3uContent: String): List<Channel> {
         val channels = mutableListOf<Channel>()
-        val lines = m3uContent.lineSequence().map { it.trim() }.toList()
-
         var currentLogoUrl: String? = null
         var currentCategory: String? = null
         var currentName: String? = null
 
-        for (line in lines) {
-            if (line.isEmpty()) continue
+        // Safe maximum threshold limit of 1000 items per custom playlist to prevent Room CursorWindow crashes
+        val maxChannels = 1000
+
+        m3uContent.lineSequence().forEach { rawLine ->
+            val line = rawLine.trim()
+            if (line.isEmpty()) return@forEach
 
             if (line.startsWith("#EXTINF:")) {
                 // Parse attributes
@@ -37,6 +39,9 @@ object IptvParser {
                     currentName = "Неизвестный канал"
                 }
             } else if (!line.startsWith("#") && (line.startsWith("http") || line.startsWith("rtmp") || line.contains("://"))) {
+                if (channels.size >= maxChannels) {
+                    return@forEach
+                }
                 val name = currentName ?: "Канал ${channels.size + 1}"
                 channels.add(
                     Channel(
@@ -175,14 +180,16 @@ object IptvParser {
                                         )
                                         
                                         val list = programs.getOrPut(progChannelId!!) { mutableListOf() }
-                                        list.add(episode)
+                                        if (list.size < 50) {
+                                            list.add(episode)
+                                        }
                                     } catch (e: Exception) {
                                         Log.e(TAG, "Error parsing XMLTV programme timing", e)
                                     }
                                 }
                             }
                             "channel", "item" -> {
-                                if (chName != null && chUrl != null) {
+                                if (chName != null && chUrl != null && channels.size < 1000) {
                                     channels.add(
                                         Channel(
                                             playlistId = playlistId,
