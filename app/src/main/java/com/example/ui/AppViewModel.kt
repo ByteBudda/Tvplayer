@@ -174,6 +174,84 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun editPlaylist(playlist: Playlist) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                repository.updatePlaylist(playlist)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed editing playlist", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    fun addChannel(channel: Channel) {
+        viewModelScope.launch {
+            try {
+                repository.addChannel(channel)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed adding channel", e)
+            }
+        }
+    }
+
+    fun updateChannel(channel: Channel) {
+        viewModelScope.launch {
+            try {
+                repository.updateChannel(channel)
+                if (_selectedChannel.value?.id == channel.id) {
+                    _selectedChannel.value = channel
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed updating channel", e)
+            }
+        }
+    }
+
+    fun deleteChannel(channelId: Long) {
+        viewModelScope.launch {
+            try {
+                repository.deleteChannel(channelId)
+                if (_selectedChannel.value?.id == channelId) {
+                    _selectedChannel.value = null
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed deleting channel", e)
+            }
+        }
+    }
+
+    private val _cleanResultCount = MutableStateFlow<Int?>(null)
+    val cleanResultCount: StateFlow<Int?> = _cleanResultCount.asStateFlow()
+
+    fun clearCleanResult() {
+        _cleanResultCount.value = null
+    }
+
+    fun cleanUnavailableChannels(playlistId: Long) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                val removed = repository.cleanUnavailableChannels(playlistId)
+                _cleanResultCount.value = removed
+                // Reset selected channel if it was removed
+                val current = _selectedChannel.value
+                if (current != null && current.playlistId == playlistId) {
+                    val exists = repository.allChannels.first().any { it.id == current.id }
+                    if (!exists) {
+                        _selectedChannel.value = null
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed cleaning channels", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
     fun refreshPlaylist(playlistId: Long) {
         viewModelScope.launch {
             _isRefreshing.value = true

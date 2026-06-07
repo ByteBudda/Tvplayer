@@ -16,6 +16,9 @@ interface AppDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertPlaylist(playlist: Playlist): Long
 
+    @Update
+    suspend fun updatePlaylist(playlist: Playlist)
+
     @Delete
     suspend fun deletePlaylist(playlist: Playlist)
 
@@ -37,6 +40,18 @@ interface AppDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertChannels(channels: List<Channel>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertChannel(channel: Channel): Long
+
+    @Update
+    suspend fun updateChannel(channel: Channel)
+
+    @Delete
+    suspend fun deleteChannel(channel: Channel)
+
+    @Query("DELETE FROM channel WHERE id = :channelId")
+    suspend fun deleteChannelById(channelId: Long)
 
     @Query("DELETE FROM channel WHERE playlistId = :playlistId")
     suspend fun deleteChannelsByPlaylist(playlistId: Long)

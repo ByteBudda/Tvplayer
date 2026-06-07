@@ -158,6 +158,80 @@ class AppRepository(
         appDao.deleteChannelsByPlaylist(playlistId)
     }
 
+    suspend fun updatePlaylist(playlist: Playlist) = withContext(Dispatchers.IO) {
+        appDao.updatePlaylist(playlist)
+    }
+
+    suspend fun addChannel(channel: Channel): Long = withContext(Dispatchers.IO) {
+        appDao.insertChannel(channel)
+    }
+
+    suspend fun updateChannel(channel: Channel) = withContext(Dispatchers.IO) {
+        appDao.updateChannel(channel)
+    }
+
+    suspend fun deleteChannel(channelId: Long) = withContext(Dispatchers.IO) {
+        appDao.deleteChannelById(channelId)
+    }
+
+    suspend fun cleanUnavailableChannels(playlistId: Long): Int = withContext(Dispatchers.IO) {
+        val channels = appDao.getChannelsByPlaylist(playlistId)
+        var removedCount = 0
+        channels.forEach { channel ->
+            val isAlive = checkChannelAccessible(channel.streamUrl)
+            if (!isAlive) {
+                appDao.deleteChannelById(channel.id)
+                removedCount++
+            }
+        }
+        removedCount
+    }
+
+    private suspend fun checkChannelAccessible(url: String): Boolean = withContext(Dispatchers.IO) {
+        if (!url.startsWith("http") && !url.startsWith("https")) {
+            if (url.startsWith("rtsp://") || url.startsWith("rtmp://")) return@withContext true
+            val file = java.io.File(url)
+            return@withContext file.exists()
+        }
+        try {
+            val request = Request.Builder()
+                .url(url)
+                .head()
+                .header("User-Agent", "Mozilla/5.0")
+                .build()
+            
+            val response = client.newBuilder()
+                .connectTimeout(2000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .readTimeout(2000, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .build()
+                .newCall(request)
+                .execute()
+                
+            val success = response.isSuccessful || response.code == 405 || response.code == 403 || response.code == 301 || response.code == 302
+            response.close()
+            success
+        } catch (e: Exception) {
+            try {
+                val request = Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "Mozilla/5.0")
+                    .header("Range", "bytes=0-1024")
+                    .build()
+                val response = client.newBuilder()
+                    .connectTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .readTimeout(2500, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    .build()
+                    .newCall(request)
+                    .execute()
+                val success = response.isSuccessful || response.code == 206 || response.code == 200 || response.code == 403
+                response.close()
+                success
+            } catch (e2: Exception) {
+                false
+            }
+        }
+    }
+
     suspend fun toggleFavorite(channelId: Long, isFavorite: Boolean) = withContext(Dispatchers.IO) {
         appDao.updateFavorite(channelId, isFavorite)
     }
