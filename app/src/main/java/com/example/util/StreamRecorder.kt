@@ -76,6 +76,18 @@ object StreamRecorder {
                         connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
                         connection.setRequestProperty("Accept", "*/*")
                         
+                        // Initial update to show we have started
+                        dao.updateRecording(Recording(
+                            id = id,
+                            channelName = channelName,
+                            streamUrl = streamUrl,
+                            startTime = timestamp,
+                            durationMs = 0L,
+                            filePath = file.absolutePath,
+                            fileSize = 0L,
+                            status = "Recording"
+                        ))
+                        
                         val responseCode = connection.responseCode
                         Log.d(TAG, "Recording $channelName: Response code $responseCode for $streamUrl")
                         
@@ -99,8 +111,10 @@ object StreamRecorder {
                                 outStream.write(buffer, 0, bytesRead)
                                 bytesWritten += bytesRead
                                 
-                                if (bytesWritten % (1024 * 1024 * 4) == 0L) {
-                                    val currentDuration = System.currentTimeMillis() - startTime
+                                // Update every 1MB or every 5 seconds
+                                val currentTime = System.currentTimeMillis()
+                                if (bytesWritten % (1024 * 1024) == 0L) {
+                                    val currentDuration = currentTime - startTime
                                     val updated = Recording(
                                         id = id,
                                         channelName = channelName,
@@ -116,13 +130,16 @@ object StreamRecorder {
                             }
                         } else {
                             httpErrorDetails = "HTTP $responseCode"
+                            if (responseCode == 403) httpErrorDetails = "Forbidden (403)"
+                            if (responseCode == 404) httpErrorDetails = "Not Found (404)"
                             Log.e(TAG, "Server returned response code $responseCode")
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Recording error for $channelName", e)
-                        httpErrorDetails = e.message
+                        httpErrorDetails = e.localizedMessage ?: e.message
                     } finally {
                         try {
+                            outStream?.flush()
                             outStream?.close()
                         } catch (e: Exception) {}
                         try {
@@ -134,10 +151,11 @@ object StreamRecorder {
                             activeJobs.remove(id)
                             jobUrls.remove(id)
 
-                            val duration = System.currentTimeMillis() - startTime
-                            val size = if (file.exists()) file.length() else 0L
+                            val finalDuration = System.currentTimeMillis() - startTime
+                            val finalSize = if (file.exists()) file.length() else bytesWritten
                             
-                            val isSufficientSize = size > 10 * 1024
+                            // If we have downloaded more than 100KB, mark completed
+                            val isSufficientSize = finalSize > 100 * 1024
                             val finalStatus = if (isSufficientSize) "Completed" else (httpErrorDetails ?: "Failed")
 
                             val completedRecording = Recording(
@@ -145,13 +163,13 @@ object StreamRecorder {
                                 channelName = channelName,
                                 streamUrl = streamUrl,
                                 startTime = timestamp,
-                                durationMs = duration,
+                                durationMs = finalDuration,
                                 filePath = file.absolutePath,
-                                fileSize = size,
+                                fileSize = finalSize,
                                 status = finalStatus
                             )
                             dao.updateRecording(completedRecording)
-                            Log.i(TAG, "Finished recording task for $channelName, status: $finalStatus, size: $size bytes")
+                            Log.i(TAG, "Finished recording task for $channelName, status: $finalStatus, size: $finalSize bytes")
                         }
                     }
                 }

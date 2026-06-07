@@ -168,7 +168,7 @@ fun RecordingsScreen(
                                     modifier = Modifier.size(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.Gray)
                                 )
                                 Text(
-                                    text = if (rec.status == "Recording") "Пишется..." else formatDuration(rec.durationMs),
+                                    text = if (rec.status == "Recording") "Запись: ${formatDuration(rec.durationMs)}" else formatDuration(rec.durationMs),
                                     color = if (rec.status == "Recording") LiveRed else CinemaAmber,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold

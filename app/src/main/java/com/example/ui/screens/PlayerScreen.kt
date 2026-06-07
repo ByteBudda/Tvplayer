@@ -583,12 +583,29 @@ fun PlayerScreen(
                                     }
                                     
                                     if (channel.isLocked && parentalEnabled) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Lock,
-                                            contentDescription = "Родительский контроль",
-                                            tint = LiveRed,
-                                            modifier = Modifier.size(16.dp)
-                                        )
+                                        IconButton(
+                                            onClick = { viewModel.toggleChannelLock(channel) },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Lock,
+                                                contentDescription = "Убрать замок",
+                                                tint = LiveRed,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    } else if (parentalEnabled) {
+                                        IconButton(
+                                            onClick = { viewModel.toggleChannelLock(channel) },
+                                            modifier = Modifier.size(36.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.LockOpen,
+                                                contentDescription = "Установить замок",
+                                                tint = Color.Gray.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
 
                                     IconButton(
