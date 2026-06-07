@@ -49,7 +49,9 @@ fun VideoPlayer(
     isRecording: Boolean,
     modifier: Modifier = Modifier,
     isFullscreen: Boolean = false,
+    resizeMode: Int = 0,
     onToggleFullscreen: () -> Unit = {},
+    onToggleResizeMode: () -> Unit = {},
     onPreviousChannel: (() -> Unit)? = null,
     onNextChannel: (() -> Unit)? = null,
     onToggleRecording: () -> Unit = {}
@@ -291,6 +293,7 @@ fun VideoPlayer(
                                 player = exoPlayer
                                 useController = false // Force disabled default controller
                                 setBackgroundColor(android.graphics.Color.BLACK)
+                                this.resizeMode = resizeMode
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -305,6 +308,7 @@ fun VideoPlayer(
                     update = { view ->
                         try {
                             view.player = exoPlayer
+                            view.resizeMode = resizeMode
                         } catch (e: Throwable) {
                             Log.e("VideoPlayer", "Error updating PlayerView player", e)
                         }
@@ -581,6 +585,23 @@ fun VideoPlayer(
                                         contentDescription = if (isFullscreen) "Выйти из полноэкранного режима" else "Войти в полноэкранный режим",
                                         tint = Color.White,
                                         modifier = Modifier.size(24.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(8.dp))
+
+                                // Aspect Ratio Toggle
+                                IconButton(
+                                    onClick = onToggleResizeMode,
+                                    modifier = Modifier
+                                        .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                        .size(38.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.AspectRatio,
+                                        contentDescription = "Соотношение сторон",
+                                        tint = CinemaAmber,
+                                        modifier = Modifier.size(22.dp)
                                     )
                                 }
                             }

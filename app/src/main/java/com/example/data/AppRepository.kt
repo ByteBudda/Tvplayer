@@ -261,6 +261,15 @@ class AppRepository(
         appDao.insertSetting(AppSetting("parental_enabled", enabled.toString()))
     }
 
+    // --- VIDEO SETTINGS ---
+    suspend fun getResizeMode(): Int = withContext(Dispatchers.IO) {
+        appDao.getSetting("resize_mode")?.value?.toIntOrNull() ?: 0
+    }
+
+    suspend fun setResizeMode(mode: Int) = withContext(Dispatchers.IO) {
+        appDao.insertSetting(AppSetting("resize_mode", mode.toString()))
+    }
+
     // --- EPG / ARCHIVE SCHEDULE FETCHING ---
     suspend fun fetchChannelArchiveSchedule(channelName: String): List<ProgramEpisode> = withContext(Dispatchers.IO) {
         // Return a highly structured schedule of past and present programs.

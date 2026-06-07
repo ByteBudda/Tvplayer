@@ -29,6 +29,8 @@ import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -42,13 +44,21 @@ class MainActivity : ComponentActivity() {
 
                 val context = LocalContext.current
                 LaunchedEffect(isFullscreen) {
-                    val window = (context as? android.app.Activity)?.window ?: return@LaunchedEffect
+                    val activity = context as? android.app.Activity ?: return@LaunchedEffect
+                    val window = activity.window
                     val controller = WindowCompat.getInsetsController(window, window.decorView)
                     if (isFullscreen) {
                         controller.hide(WindowInsetsCompat.Type.systemBars())
                         controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                        
+                        // Mobile full-screen: FORCE HORIZONTAL
+                        val configuration = activity.resources.configuration
+                        if (configuration.screenWidthDp < 600) {
+                            activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+                        }
                     } else {
                         controller.show(WindowInsetsCompat.Type.systemBars())
+                        activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                     }
                 }
 

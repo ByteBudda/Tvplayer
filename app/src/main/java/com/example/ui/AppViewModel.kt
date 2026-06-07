@@ -70,6 +70,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _isFullscreen.value = enabled
     }
 
+    // Video Aspect Ratio / Resize Mode
+    private val _videoResizeMode = MutableStateFlow(0)
+    val videoResizeMode: StateFlow<Int> = _videoResizeMode.asStateFlow()
+
+    fun setVideoResizeMode(mode: Int) {
+        _videoResizeMode.value = mode
+        viewModelScope.launch {
+            repository.setResizeMode(mode)
+        }
+    }
+
     // Active media source mode: direct stream, recording, or archive timeshift
     sealed interface PlayMediaMode {
         data object DirectLive : PlayMediaMode
@@ -84,6 +95,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             // Check parental state
             _parentalEnabled.value = repository.isParentalControlEnabled()
             _parentalPin.value = repository.getParentalPin()
+            _videoResizeMode.value = repository.getResizeMode()
 
             // Preload default built-in playlist if there are no playlists (safe one-shot check on startup)
             try {
