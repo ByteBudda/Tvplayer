@@ -64,6 +64,7 @@ object StreamRecorder {
                     val startTime = System.currentTimeMillis()
                     var successCompletion = false
 
+                    var httpErrorDetails: String? = null
                     try {
                         outStream = FileOutputStream(file)
                         
@@ -73,16 +74,24 @@ object StreamRecorder {
                         connection.readTimeout = 30000
                         connection.instanceFollowRedirects = true
                         connection.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+                        connection.setRequestProperty("Accept", "*/*")
                         
                         val responseCode = connection.responseCode
-                        Log.d(TAG, "Recording $channelName: Response code $responseCode")
+                        Log.d(TAG, "Recording $channelName: Response code $responseCode for $streamUrl")
+                        
                         if (responseCode in 200..299) {
                             val inStream = connection.inputStream
-                            val buffer = ByteArray(65536) // 64kb chunks
+                            val buffer = ByteArray(128 * 1024)
                             var bytesRead: Int
                             
                             while (isActive) {
-                                bytesRead = inStream.read(buffer)
+                                bytesRead = try { 
+                                    inStream.read(buffer) 
+                                } catch (e: Exception) { 
+                                    Log.e(TAG, "Read error for $channelName", e)
+                                    -1 
+                                }
+                                
                                 if (bytesRead == -1) {
                                     successCompletion = true
                                     break
@@ -90,7 +99,6 @@ object StreamRecorder {
                                 outStream.write(buffer, 0, bytesRead)
                                 bytesWritten += bytesRead
                                 
-                                // Periodically update database record with size and current duration (every 4MB or so)
                                 if (bytesWritten % (1024 * 1024 * 4) == 0L) {
                                     val currentDuration = System.currentTimeMillis() - startTime
                                     val updated = Recording(
@@ -107,10 +115,12 @@ object StreamRecorder {
                                 }
                             }
                         } else {
+                            httpErrorDetails = "HTTP $responseCode"
                             Log.e(TAG, "Server returned response code $responseCode")
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Recording error for $channelName", e)
+                        httpErrorDetails = e.message
                     } finally {
                         try {
                             outStream?.close()
@@ -119,18 +129,16 @@ object StreamRecorder {
                             connection?.disconnect()
                         } catch (e: Exception) {}
 
-                        // Clean up state and write database state robustly even if cancelled
                         withContext(NonCancellable) {
                             _recordingUrls.value = _recordingUrls.value - streamUrl
                             activeJobs.remove(id)
                             jobUrls.remove(id)
 
                             val duration = System.currentTimeMillis() - startTime
-                            val size = file.length()
+                            val size = if (file.exists()) file.length() else 0L
                             
-                            // If we have downloaded more than 10KB, mark completed, otherwise failed
                             val isSufficientSize = size > 10 * 1024
-                            val finalStatus = if (isSufficientSize) "Completed" else "Failed"
+                            val finalStatus = if (isSufficientSize) "Completed" else (httpErrorDetails ?: "Failed")
 
                             val completedRecording = Recording(
                                 id = id,

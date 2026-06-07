@@ -4,9 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.example.util.IptvParser
 import com.example.util.XmlParseResult
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.InputStreamReader
@@ -174,17 +173,23 @@ class AppRepository(
         appDao.deleteChannelById(channelId)
     }
 
-    suspend fun cleanUnavailableChannels(playlistId: Long): Int = withContext(Dispatchers.IO) {
+    suspend fun cleanUnavailableChannels(playlistId: Long): Int = coroutineScope {
         val channels = appDao.getChannelsByPlaylist(playlistId)
-        var removedCount = 0
-        channels.forEach { channel ->
-            val isAlive = checkChannelAccessible(channel.streamUrl)
-            if (!isAlive) {
-                appDao.deleteChannelById(channel.id)
-                removedCount++
+        val dispatcher = Dispatchers.IO.limitedParallelism(15) // Check up to 15 channels at once
+        
+        val results = channels.map { channel ->
+            async(dispatcher) {
+                val isAlive = checkChannelAccessible(channel.streamUrl)
+                if (!isAlive) {
+                    appDao.deleteChannelById(channel.id)
+                    1
+                } else {
+                    0
+                }
             }
-        }
-        removedCount
+        }.awaitAll()
+        
+        results.sum()
     }
 
     private suspend fun checkChannelAccessible(url: String): Boolean = withContext(Dispatchers.IO) {
