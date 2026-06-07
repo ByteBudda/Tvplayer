@@ -50,6 +50,7 @@ fun PlaylistsScreen(
     var channelName by remember { mutableStateOf("") }
     var channelUrl by remember { mutableStateOf("") }
     var channelCategory by remember { mutableStateOf("") }
+    var channelLogo by remember { mutableStateOf("") }
     var isChannelInputError by remember { mutableStateOf(false) }
 
     var channelToEdit by remember { mutableStateOf<Channel?>(null) }
@@ -57,6 +58,7 @@ fun PlaylistsScreen(
     var editChannelName by remember { mutableStateOf("") }
     var editChannelUrl by remember { mutableStateOf("") }
     var editChannelCategory by remember { mutableStateOf("") }
+    var editChannelLogo by remember { mutableStateOf("") }
     var isEditChannelInputError by remember { mutableStateOf(false) }
 
     Column(
@@ -510,6 +512,7 @@ fun PlaylistsScreen(
                                 channelName = ""
                                 channelUrl = ""
                                 channelCategory = "Общие"
+                                channelLogo = ""
                                 isChannelInputError = false
                                 showAddChannelDialog = true
                             },
@@ -638,6 +641,35 @@ fun PlaylistsScreen(
                                             .padding(12.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
+                                        // Visual Channel Logo with fallback
+                                        Box(
+                                            modifier = Modifier
+                                                .size(38.dp)
+                                                .clip(RoundedCornerShape(6.dp))
+                                                .background(Color.White.copy(alpha = 0.1f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (!channel.logoUrl.isNullOrEmpty()) {
+                                                coil.compose.AsyncImage(
+                                                    model = channel.logoUrl,
+                                                    contentDescription = channel.name,
+                                                    contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                                    modifier = Modifier
+                                                        .fillMaxSize()
+                                                        .padding(3.dp)
+                                                )
+                                            } else {
+                                                Text(
+                                                    text = channel.name.take(1).uppercase(),
+                                                    color = Color.White.copy(alpha = 0.8f),
+                                                    style = MaterialTheme.typography.bodyMedium,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        Spacer(modifier = Modifier.width(10.dp))
+
                                         Column(modifier = Modifier.weight(1f)) {
                                             Row(
                                                 verticalAlignment = Alignment.CenterVertically,
@@ -684,6 +716,7 @@ fun PlaylistsScreen(
                                                     editChannelName = channel.name
                                                     editChannelUrl = channel.streamUrl
                                                     editChannelCategory = channel.category ?: "Общие"
+                                                    editChannelLogo = channel.logoUrl ?: ""
                                                     isEditChannelInputError = false
                                                     showEditChannelDialog = true
                                                 }
@@ -750,27 +783,36 @@ fun PlaylistsScreen(
                     )
 
                     OutlinedTextField(
-                        value = channelCategory,
-                        onValueChange = { channelCategory = it },
-                        label = { Text("Категория") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (channelName.isNotBlank() && channelUrl.isNotBlank()) {
-                            viewModel.addChannel(
-                                Channel(
-                                    playlistId = playlist.id,
-                                    name = channelName,
-                                    streamUrl = channelUrl,
-                                    category = if (channelCategory.isBlank()) "Общие" else channelCategory
-                                )
+                                value = channelCategory,
+                                onValueChange = { channelCategory = it },
+                                label = { Text("Категория") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
                             )
-                            showAddChannelDialog = false
+
+                            OutlinedTextField(
+                                value = channelLogo,
+                                onValueChange = { channelLogo = it },
+                                label = { Text("Ссылка на логотип (URL) (необязательно)") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (channelName.isNotBlank() && channelUrl.isNotBlank()) {
+                                    viewModel.addChannel(
+                                        Channel(
+                                            playlistId = playlist.id,
+                                            name = channelName,
+                                            streamUrl = channelUrl,
+                                            logoUrl = if (channelLogo.isBlank()) null else channelLogo,
+                                            category = if (channelCategory.isBlank()) "Общие" else channelCategory
+                                        )
+                                    )
+                                    showAddChannelDialog = false
                         } else {
                             isChannelInputError = true
                         }
@@ -823,6 +865,14 @@ fun PlaylistsScreen(
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
+
+                    OutlinedTextField(
+                        value = editChannelLogo,
+                        onValueChange = { editChannelLogo = it },
+                        label = { Text("Ссылка на логотип (URL)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
                 }
             },
             confirmButton = {
@@ -833,6 +883,7 @@ fun PlaylistsScreen(
                                 current.copy(
                                     name = editChannelName,
                                     streamUrl = editChannelUrl,
+                                    logoUrl = if (editChannelLogo.isBlank()) null else editChannelLogo,
                                     category = if (editChannelCategory.isBlank()) "Общие" else editChannelCategory
                                 )
                             )

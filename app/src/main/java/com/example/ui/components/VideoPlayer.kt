@@ -7,6 +7,8 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import java.io.File
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -31,26 +33,38 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import coil.compose.AsyncImage
 import com.example.ui.AppViewModel
 import com.example.ui.theme.CinemaAmber
 import com.example.ui.theme.LiveRed
 import com.example.ui.theme.SkyBlue
-import java.io.File
 
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayer(
     streamUrl: String?,
     title: String,
+    logoUrl: String? = null,
     mode: AppViewModel.PlayMediaMode,
     isRecording: Boolean,
     modifier: Modifier = Modifier,
+    isFullscreen: Boolean = false,
+    onToggleFullscreen: () -> Unit = {},
+    onPreviousChannel: (() -> Unit)? = null,
+    onNextChannel: (() -> Unit)? = null,
     onToggleRecording: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(true) }
     var isLoading by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
+
+    // Custom playback controls visible state
+    var showControls by remember { mutableStateOf(true) }
+
+    // Track playback progress for recording and archive
+    var currentPos by remember { mutableStateOf(0L) }
+    var totalDuration by remember { mutableStateOf(0L) }
 
     // Pulse animation for Recording or Live Indicator
     val infiniteTransition = rememberInfiniteTransition(label = "pulse")
@@ -64,7 +78,7 @@ fun VideoPlayer(
         label = "pulse_alpha"
     )
 
-    // Instantiate ExoPlayer safely with try-catch
+    // Instantiate ExoPlayer safely
     val exoPlayer = remember(context) {
         try {
             ExoPlayer.Builder(context.applicationContext).build().apply {
@@ -77,7 +91,7 @@ fun VideoPlayer(
         }
     }
 
-    // Set up Player listeners safely
+    // Set up Player listeners cleanly
     DisposableEffect(exoPlayer) {
         val player = exoPlayer
         if (player == null) {
@@ -88,6 +102,8 @@ fun VideoPlayer(
                     isPlaying = player.isPlaying
                     isLoading = state == Player.STATE_BUFFERING
                     hasError = false
+                    currentPos = player.currentPosition
+                    totalDuration = player.duration
                 }
 
                 override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
@@ -117,7 +133,27 @@ fun VideoPlayer(
         }
     }
 
-    // Prepare and play the URI based on URL / File path safely
+    // Periodically update progress if playing
+    LaunchedEffect(exoPlayer, isPlaying) {
+        val player = exoPlayer ?: return@LaunchedEffect
+        if (isPlaying) {
+            while (true) {
+                currentPos = player.currentPosition
+                totalDuration = player.duration
+                kotlinx.coroutines.delay(500)
+            }
+        }
+    }
+
+    // Auto-hide controls panel
+    LaunchedEffect(showControls, isPlaying) {
+        if (showControls && isPlaying) {
+            kotlinx.coroutines.delay(4000)
+            showControls = false
+        }
+    }
+
+    // Prepare and play the media stream URL safely
     LaunchedEffect(streamUrl, mode, exoPlayer) {
         val player = exoPlayer ?: return@LaunchedEffect
         if (streamUrl.isNullOrEmpty()) {
@@ -135,7 +171,6 @@ fun VideoPlayer(
         try {
             val mediaUri = when (mode) {
                 is AppViewModel.PlayMediaMode.RecordingPlay -> {
-                    // Play local file
                     val file = File(mode.recording.filePath)
                     if (file.exists()) Uri.fromFile(file) else Uri.parse(streamUrl)
                 }
@@ -175,7 +210,13 @@ fun VideoPlayer(
         modifier = modifier
             .testTag("video_player_box")
             .background(Color.Black)
-            .aspectRatio(16f / 9f)
+            .then(
+                if (isFullscreen) {
+                    Modifier.fillMaxSize()
+                } else {
+                    Modifier.aspectRatio(16f / 9f)
+                }
+            )
     ) {
         if (streamUrl.isNullOrEmpty()) {
             // Visual Empty Placeholder
@@ -242,13 +283,13 @@ fun VideoPlayer(
                     )
                 }
             } else {
-                // Android View hosting the ExoPlayer PlayerView safely
+                // Android View hosting the ExoPlayer PlayerView
                 AndroidView(
                     factory = { ctx ->
                         try {
                             PlayerView(ctx).apply {
                                 player = exoPlayer
-                                useController = true
+                                useController = false // Force disabled default controller
                                 setBackgroundColor(android.graphics.Color.BLACK)
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
@@ -276,105 +317,272 @@ fun VideoPlayer(
                         }
                     }
                 )
-            }
 
-            // Dynamic Playback Overlay HUD
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(12.dp)
-            ) {
-                // TOP HUD: Channel Title & Action Badges
-                Row(
+                // Transparent background click capturing layer to catch touch actions safely on AndroidView
+                Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopStart),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .clickable { showControls = !showControls }
+                )
+
+                // Dynamic custom Playback Overlay HUD with fade transitions
+                AnimatedVisibility(
+                    visible = showControls,
+                    enter = fadeIn(animationSpec = tween(300)),
+                    exit = fadeOut(animationSpec = tween(300)),
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    Column(
+                    Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.5f))
+                            .padding(12.dp)
                     ) {
-                        Text(
-                            text = title,
-                            color = Color.White,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
+                        // 1. TOP HUD ROW: Title, Logo & Mode indicators
+                        Row(
                             modifier = Modifier
-                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                                .padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                        
-                        // Archive notice
-                        if (mode is AppViewModel.PlayMediaMode.ArchivePlay) {
-                            Text(
-                                text = "Запись: ${mode.episode.title}",
-                                color = SkyBlue,
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier
-                                    .padding(top = 4.dp)
-                                    .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                    }
-
-                    // Badge Row
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Playback Mode Badge
-                        val (badgeText, badgeColor) = when (mode) {
-                            is AppViewModel.PlayMediaMode.ArchivePlay -> "АРХИВ" to SkyBlue
-                            is AppViewModel.PlayMediaMode.RecordingPlay -> "ЗАПИСЬ" to CinemaAmber
-                            is AppViewModel.PlayMediaMode.DirectLive -> "ЭФИР" to LiveRed
-                        }
-
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(4.dp))
-                                .background(Color.Black.copy(alpha = 0.7f))
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            contentAlignment = Alignment.Center
+                                .fillMaxWidth()
+                                .align(Alignment.TopStart),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.weight(1f, fill = false)
                             ) {
+                                if (isFullscreen) {
+                                    // Easily exit fullscreen
+                                    IconButton(
+                                        onClick = onToggleFullscreen,
+                                        modifier = Modifier
+                                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                            .size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.ArrowBack,
+                                            contentDescription = "Выйти из полноэкранного режима",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    if (!logoUrl.isNullOrEmpty()) {
+                                        AsyncImage(
+                                            model = logoUrl,
+                                            contentDescription = title,
+                                            modifier = Modifier
+                                                .size(24.dp)
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(Color.White.copy(alpha = 0.15f))
+                                                .padding(2.dp)
+                                        )
+                                    }
+                                    Text(
+                                        text = title,
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                if (mode is AppViewModel.PlayMediaMode.ArchivePlay) {
+                                    Text(
+                                        text = "Запись: ${mode.episode.title}",
+                                        color = SkyBlue,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier
+                                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                val (badgeText, badgeColor) = when (mode) {
+                                    is AppViewModel.PlayMediaMode.ArchivePlay -> "АРХИВ" to SkyBlue
+                                    is AppViewModel.PlayMediaMode.RecordingPlay -> "ЗАПИСЬ" to CinemaAmber
+                                    is AppViewModel.PlayMediaMode.DirectLive -> "ЭФИР" to LiveRed
+                                }
+
                                 Box(
                                     modifier = Modifier
-                                        .size(8.dp)
-                                        .clip(CircleShape)
-                                        .background(badgeColor.copy(alpha = if (mode is AppViewModel.PlayMediaMode.DirectLive) pulseAlpha else 1.0f))
+                                        .clip(RoundedCornerShape(4.dp))
+                                        .background(Color.Black.copy(alpha = 0.7f))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(8.dp)
+                                                .clip(CircleShape)
+                                                .background(badgeColor.copy(alpha = if (mode is AppViewModel.PlayMediaMode.DirectLive) pulseAlpha else 1.0f))
+                                        )
+                                        Text(
+                                            text = badgeText,
+                                            color = Color.White,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+
+                                if (mode is AppViewModel.PlayMediaMode.DirectLive) {
+                                    IconButton(
+                                        onClick = onToggleRecording,
+                                        modifier = Modifier
+                                            .testTag("record_channel_button")
+                                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                            .size(36.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.FiberManualRecord,
+                                            contentDescription = "Записать передачу",
+                                            tint = if (isRecording) LiveRed.copy(alpha = pulseAlpha) else Color.White,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // 2. CENTER PANEL: Previous, Play/Pause, Next channel controls
+                        Row(
+                            modifier = Modifier.align(Alignment.Center),
+                            horizontalArrangement = Arrangement.spacedBy(28.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Previous Channel Button
+                            IconButton(
+                                onClick = { onPreviousChannel?.invoke() },
+                                modifier = Modifier
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                    .size(50.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.SkipPrevious,
+                                    contentDescription = "Предыдущий канал",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(30.dp)
                                 )
-                                Text(
-                                    text = badgeText,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold
+                            }
+
+                            // Play/Pause button
+                            IconButton(
+                                onClick = {
+                                    exoPlayer.let { player ->
+                                        if (player.isPlaying) player.pause() else player.play()
+                                    }
+                                },
+                                modifier = Modifier
+                                    .background(CinemaAmber, CircleShape)
+                                    .size(58.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                    contentDescription = if (isPlaying) "Пауза" else "Воспроизведение",
+                                    tint = Color.Black,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+
+                            // Next Channel Button
+                            IconButton(
+                                onClick = { onNextChannel?.invoke() },
+                                modifier = Modifier
+                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                    .size(50.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.SkipNext,
+                                    contentDescription = "Следующий канал",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(30.dp)
                                 )
                             }
                         }
 
-                        // Physical Live Recording button inside the player
-                        if (mode is AppViewModel.PlayMediaMode.DirectLive) {
-                            IconButton(
-                                onClick = onToggleRecording,
-                                modifier = Modifier
-                                    .testTag("record_channel_button")
-                                    .background(Color.Black.copy(alpha = 0.7f), CircleShape)
-                                    .size(36.dp)
+                        // 3. BOTTOM PANEL: SEEKBAR & FULLSCREEN CONTROLLER
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .align(Alignment.BottomStart),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            val isMediaSeekable = mode is AppViewModel.PlayMediaMode.ArchivePlay || mode is AppViewModel.PlayMediaMode.RecordingPlay
+                            if (isMediaSeekable && totalDuration > 0) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Text(
+                                        text = formatTime(currentPos),
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+
+                                    Slider(
+                                        value = currentPos.toFloat().coerceIn(0f, totalDuration.toFloat()),
+                                        onValueChange = { newValue ->
+                                            exoPlayer.seekTo(newValue.toLong())
+                                        },
+                                        valueRange = 0f..totalDuration.toFloat(),
+                                        modifier = Modifier.weight(1f),
+                                        colors = SliderDefaults.colors(
+                                            thumbColor = CinemaAmber,
+                                            activeTrackColor = CinemaAmber,
+                                            inactiveTrackColor = Color.White.copy(alpha = 0.3f),
+                                            activeTickColor = Color.Transparent,
+                                            inactiveTickColor = Color.Transparent
+                                        )
+                                    )
+
+                                    Text(
+                                        text = formatTime(totalDuration),
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.FiberManualRecord,
-                                    contentDescription = "Записать передачу",
-                                    tint = if (isRecording) LiveRed.copy(alpha = pulseAlpha) else Color.White,
-                                    modifier = Modifier.size(20.dp)
-                                )
+                                IconButton(
+                                    onClick = onToggleFullscreen,
+                                    modifier = Modifier
+                                        .testTag("toggle_fullscreen_button")
+                                        .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                        .size(38.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                                        contentDescription = if (isFullscreen) "Выйти из полноэкранного режима" else "Войти в полноэкранный режим",
+                                        tint = Color.White,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
                             }
                         }
                     }
@@ -423,5 +631,17 @@ fun VideoPlayer(
                 }
             }
         }
+    }
+}
+
+private fun formatTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val seconds = totalSeconds % 60
+    val minutes = (totalSeconds / 60) % 60
+    val hours = totalSeconds / 3600
+    return if (hours > 0) {
+        String.format("%02d:%02d:%02d", hours, minutes, seconds)
+    } else {
+        String.format("%02d:%02d", minutes, seconds)
     }
 }

@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.example.data.Channel
 import com.example.data.ProgramEpisode
 import com.example.ui.AppViewModel
@@ -57,6 +58,11 @@ fun PlayerScreen(
     var pinInputValue by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf(false) }
 
+    // Full-screen toggle state
+    var isFullscreen by remember { mutableStateOf(false) }
+    // EPG Accordion/Spoiler toggle state
+    var isEpgExpanded by remember { mutableStateOf(false) }
+
     // Filter channels based on chosen category
     val filteredChannels = remember(channels, selectedCategory) {
         when (selectedCategory) {
@@ -74,134 +80,330 @@ fun PlayerScreen(
         }
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // 1. VIDEO PLAYER SECTION (TOP)
-        val isCurrentRecording = selectedChannel?.let { viewModel.activeRecordingUrls.value.contains(it.streamUrl) } ?: false
-        
-        VideoPlayer(
-            streamUrl = when (playMode) {
-                is AppViewModel.PlayMediaMode.RecordingPlay -> (playMode as AppViewModel.PlayMediaMode.RecordingPlay).recording.streamUrl
-                is AppViewModel.PlayMediaMode.ArchivePlay -> {
-                    val base = selectedChannel?.streamUrl
-                    if (base != null) {
-                        val archiveTs = (playMode as AppViewModel.PlayMediaMode.ArchivePlay).episode.startTimeMs / 1000
-                        "$base?utc=$archiveTs"
-                    } else {
-                        null
-                    }
-                }
-                is AppViewModel.PlayMediaMode.DirectLive -> selectedChannel?.streamUrl
-            },
-            title = selectedChannel?.name ?: "ТВ Плеер",
-            mode = playMode,
-            isRecording = isCurrentRecording,
-            modifier = Modifier
-                .fillMaxWidth(),
-            onToggleRecording = {
-                viewModel.toggleRecordingActiveChannel()
-            }
-        )
-
-        // 2. TIMESIFT ARCHIVE BANNER
-        if (playMode is AppViewModel.PlayMediaMode.ArchivePlay) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(SkyBlue.copy(alpha = 0.2f))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.History,
-                            contentDescription = "Архив",
-                            tint = SkyBlue
-                        )
-                        Text(
-                            text = "Вы смотрите запись передачи из архива",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White
-                        )
-                    }
-                    Button(
-                        onClick = { viewModel.switchBackToLive() },
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = LiveRed,
-                            contentColor = Color.White
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                        shape = RoundedCornerShape(4.dp),
-                        modifier = Modifier.height(30.dp)
-                    ) {
-                        Text("Вернуться в эфир", style = MaterialTheme.typography.labelMedium)
-                    }
-                }
+    // Fast Channel switching lambda callbacks
+    val onPreviousChannel = {
+        if (filteredChannels.isNotEmpty()) {
+            val index = filteredChannels.indexOfFirst { it.id == selectedChannel?.id }
+            if (index != -1) {
+                val prevChannel = filteredChannels[(index - 1 + filteredChannels.size) % filteredChannels.size]
+                viewModel.selectChannel(prevChannel)
             }
         }
+    }
 
-        // 3. CATEGORY SELECTOR TABS
-        val allCategories = remember(categories) { listOf("Все", "★ Избранные") + categories }
-        LazyRow(
+    val onNextChannel = {
+        if (filteredChannels.isNotEmpty()) {
+            val index = filteredChannels.indexOfFirst { it.id == selectedChannel?.id }
+            if (index != -1) {
+                val nextChannel = filteredChannels[(index + 1) % filteredChannels.size]
+                viewModel.selectChannel(nextChannel)
+            }
+        }
+    }
+
+    if (isFullscreen) {
+        // FULLSCREEN PLAY MODE ONLY
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 12.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                .fillMaxSize()
+                .background(Color.Black)
         ) {
-            items(allCategories) { category ->
-                val isSelected = selectedCategory == category
+            val isCurrentRecording = selectedChannel?.let { viewModel.activeRecordingUrls.value.contains(it.streamUrl) } ?: false
+            VideoPlayer(
+                streamUrl = when (playMode) {
+                    is AppViewModel.PlayMediaMode.RecordingPlay -> (playMode as AppViewModel.PlayMediaMode.RecordingPlay).recording.streamUrl
+                    is AppViewModel.PlayMediaMode.ArchivePlay -> {
+                        val base = selectedChannel?.streamUrl
+                        if (base != null) {
+                            val archiveTs = (playMode as AppViewModel.PlayMediaMode.ArchivePlay).episode.startTimeMs / 1000
+                            "$base?utc=$archiveTs"
+                        } else {
+                            null
+                        }
+                    }
+                    is AppViewModel.PlayMediaMode.DirectLive -> selectedChannel?.streamUrl
+                },
+                title = selectedChannel?.name ?: "ТВ Плеер",
+                logoUrl = selectedChannel?.logoUrl,
+                mode = playMode,
+                isRecording = isCurrentRecording,
+                isFullscreen = true,
+                onToggleFullscreen = { isFullscreen = false },
+                onPreviousChannel = onPreviousChannel,
+                onNextChannel = onNextChannel,
+                modifier = Modifier.fillMaxSize(),
+                onToggleRecording = { viewModel.toggleRecordingActiveChannel() }
+            )
+        }
+    } else {
+        // NORMAL PORTRAIT VIEW MODE WITH THE CHANNELS LISTING & EXPANDABLE SPOILER
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            // 1. VIDEO PLAYER SECTION (TOP)
+            val isCurrentRecording = selectedChannel?.let { viewModel.activeRecordingUrls.value.contains(it.streamUrl) } ?: false
+            
+            VideoPlayer(
+                streamUrl = when (playMode) {
+                    is AppViewModel.PlayMediaMode.RecordingPlay -> (playMode as AppViewModel.PlayMediaMode.RecordingPlay).recording.streamUrl
+                    is AppViewModel.PlayMediaMode.ArchivePlay -> {
+                        val base = selectedChannel?.streamUrl
+                        if (base != null) {
+                            val archiveTs = (playMode as AppViewModel.PlayMediaMode.ArchivePlay).episode.startTimeMs / 1000
+                            "$base?utc=$archiveTs"
+                        } else {
+                            null
+                        }
+                    }
+                    is AppViewModel.PlayMediaMode.DirectLive -> selectedChannel?.streamUrl
+                },
+                title = selectedChannel?.name ?: "ТВ Плеер",
+                logoUrl = selectedChannel?.logoUrl,
+                mode = playMode,
+                isRecording = isCurrentRecording,
+                isFullscreen = false,
+                onToggleFullscreen = { isFullscreen = true },
+                onPreviousChannel = onPreviousChannel,
+                onNextChannel = onNextChannel,
+                modifier = Modifier.fillMaxWidth(),
+                onToggleRecording = { viewModel.toggleRecordingActiveChannel() }
+            )
+
+            // 2. TIMESIFT ARCHIVE BANNER
+            if (playMode is AppViewModel.PlayMediaMode.ArchivePlay) {
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(if (isSelected) MaterialTheme.colorScheme.primary else SlateCard)
-                        .then(
-                            if (isSelected) {
-                                Modifier
-                            } else {
-                                Modifier.background(SlateCard).border(
-                                    androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
-                                    RoundedCornerShape(16.dp)
-                                )
-                            }
-                        )
-                        .clickable { viewModel.selectCategory(category) }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    contentAlignment = Alignment.Center
+                        .fillMaxWidth()
+                        .background(SkyBlue.copy(alpha = 0.2f))
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    Text(
-                        text = category,
-                        color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.8f),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.History,
+                                contentDescription = "Архив",
+                                tint = SkyBlue
+                            )
+                            Text(
+                                text = "Вы смотрите запись передачи из архива",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.White
+                            )
+                        }
+                        Button(
+                            onClick = { viewModel.switchBackToLive() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = LiveRed,
+                                contentColor = Color.White
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(4.dp),
+                            modifier = Modifier.height(30.dp)
+                        ) {
+                            Text("Вернуться в эфир", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
-        }
 
-        // 4. SCREEN SPLIT PANEL: Channels Grid + Schedule
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f)
-                .padding(horizontal = 16.dp)
-        ) {
-            // Left block list: Channels Grid
+            // 3. EXPANDABLE SPOILER (EPG / TV ARCHIVE GUIDE) INSTEAD OF THE OLD PERSISTENT SIDEBAR
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 6.dp)
+                    .testTag("epg_spoiler_card"),
+                colors = CardDefaults.cardColors(
+                    containerColor = SlateCard
+                ),
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+            ) {
+                Column {
+                    // Spoiler Header
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { isEpgExpanded = !isEpgExpanded }
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.CalendarMonth,
+                                contentDescription = null,
+                                tint = CinemaAmber,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Text(
+                                text = selectedChannel?.let { "Телепрограмма и архив: ${it.name}" } ?: "Телепрограмма и архив передач",
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        Icon(
+                            imageVector = if (isEpgExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                            contentDescription = if (isEpgExpanded) "Свернуть" else "Развернуть",
+                            tint = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+
+                    // Expanded EPG list
+                    AnimatedVisibility(
+                        visible = isEpgExpanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 220.dp)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                if (archiveSchedule.isEmpty()) {
+                                    item {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 16.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                "Телепрограмма недоступна",
+                                                color = Color.Gray,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    items(archiveSchedule) { program ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable(enabled = program.isArchive) {
+                                                    viewModel.selectArchiveEpisode(program)
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (program.isArchive) SlateFocus else Color.Transparent
+                                            )
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(8.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Text(
+                                                        text = "${program.startTimeString} - ${program.endTimeString}",
+                                                        color = if (program.isArchive) SkyBlue else Color.White.copy(alpha = 0.5f),
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                    
+                                                    if (program.isArchive) {
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .clip(RoundedCornerShape(4.dp))
+                                                                .background(SkyBlue.copy(alpha = 0.15f))
+                                                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                                                        ) {
+                                                            Text(
+                                                                "ЗАПИСЬ ТВ",
+                                                                color = SkyBlue,
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                fontWeight = FontWeight.Bold
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                                
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                
+                                                Text(
+                                                    text = program.title,
+                                                    color = Color.White,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 4. CATEGORY SELECTOR TABS
+            val allCategories = remember(categories) { listOf("Все", "★ Избранные") + categories }
+            LazyRow(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(allCategories) { category ->
+                    val isSelected = selectedCategory == category
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(if (isSelected) MaterialTheme.colorScheme.primary else SlateCard)
+                            .then(
+                                if (isSelected) {
+                                    Modifier
+                                } else {
+                                    Modifier.background(SlateCard).border(
+                                        androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+                                        RoundedCornerShape(16.dp)
+                                    )
+                                }
+                            )
+                            .clickable { viewModel.selectCategory(category) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = category,
+                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.8f),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+
+            // 5. CHANNELS LISTING: Now taking the complete width of the screen!
             LazyColumn(
                 modifier = Modifier
-                    .weight(1.2f)
-                    .fillMaxHeight(),
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 16.dp)
             ) {
@@ -210,7 +412,7 @@ fun PlayerScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 32.dp),
+                                .padding(vertical = 42.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Icon(
@@ -267,20 +469,31 @@ fun PlayerScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Logo Placeholder or Letter circle
+                            // Logo AsyncImage with Letter Circle fallback
                             Box(
                                 modifier = Modifier
-                                    .size(40.dp)
+                                    .size(44.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(
-                                    text = channel.name.take(1).uppercase(),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                if (!channel.logoUrl.isNullOrEmpty()) {
+                                    AsyncImage(
+                                        model = channel.logoUrl,
+                                        contentDescription = channel.name,
+                                        contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(4.dp)
+                                    )
+                                } else {
+                                    Text(
+                                        text = channel.name.take(1).uppercase(),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
 
                             Spacer(modifier = Modifier.width(12.dp))
@@ -339,98 +552,6 @@ fun PlayerScreen(
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
-                            }
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            // Right block list: EPB/Archive TV Guide
-            Column(
-                modifier = Modifier
-                    .weight(0.8f)
-                    .fillMaxHeight()
-                    .background(SlateCard, RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp))
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = "Архив передач",
-                    color = CinemaAmber,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    if (archiveSchedule.isEmpty()) {
-                        item {
-                            Text(
-                                "Телепрограмма недоступна",
-                                color = Color.Gray,
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 16.dp)
-                            )
-                        }
-                    }
-                    
-                    items(archiveSchedule) { program ->
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable(enabled = program.isArchive) {
-                                    viewModel.selectArchiveEpisode(program)
-                                },
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (program.isArchive) SlateFocus else Color.Transparent
-                            )
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(8.dp)
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "${program.startTimeString} - ${program.endTimeString}",
-                                        color = if (program.isArchive) SkyBlue else Color.White.copy(alpha = 0.5f),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    
-                                    if (program.isArchive) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(SkyBlue.copy(alpha = 0.15f))
-                                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                "ЗАПИСЬ ТВ",
-                                                color = SkyBlue,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                                
-                                Spacer(modifier = Modifier.height(4.dp))
-                                
-                                Text(
-                                    text = program.title,
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
                             }
                         }
                     }
