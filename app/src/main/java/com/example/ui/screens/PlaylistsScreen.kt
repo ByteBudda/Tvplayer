@@ -32,6 +32,7 @@ import com.example.ui.theme.CinemaAmber
 import com.example.ui.theme.LiveRed
 import com.example.ui.theme.SkyBlue
 import com.example.ui.theme.SlateCard
+import com.example.ui.theme.SlateFocus
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -220,9 +221,10 @@ fun PlaylistsScreen(
                                 if (isCardFocused) Color.White else Color.Transparent,
                                 RoundedCornerShape(16.dp)
                             )
+                            .focusable()
                             .testTag("playlist_card_${playlist.id}"),
                         colors = CardDefaults.cardColors(
-                            containerColor = SlateCard
+                            containerColor = if (isCardFocused) SlateFocus else SlateCard
                         ),
                         shape = RoundedCornerShape(16.dp)
                     ) {
@@ -286,21 +288,27 @@ fun PlaylistsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 // Manage channels button
+                                var isManageFocused by remember { mutableStateOf(false) }
                                 IconButton(
                                     onClick = {
                                         playlistToManageChannels = playlist
                                         viewModel.clearCleanResult()
                                     },
-                                    modifier = Modifier.testTag("manage_channels_${playlist.id}")
+                                    modifier = Modifier
+                                        .onFocusChanged { isManageFocused = it.isFocused }
+                                        .background(if (isManageFocused) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape)
+                                        .focusable()
+                                        .testTag("manage_channels_${playlist.id}")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.List,
                                         contentDescription = "Каналы",
-                                        tint = SkyBlue
+                                        tint = if (isManageFocused) CinemaAmber else SkyBlue
                                     )
                                 }
 
                                 // Edit playlist button
+                                var isEditFocused by remember { mutableStateOf(false) }
                                 IconButton(
                                     onClick = {
                                         playlistToEdit = playlist
@@ -309,35 +317,49 @@ fun PlaylistsScreen(
                                         editType = playlist.type
                                         showEditDialog = true
                                     },
-                                    modifier = Modifier.testTag("edit_playlist_${playlist.id}")
+                                    modifier = Modifier
+                                        .onFocusChanged { isEditFocused = it.isFocused }
+                                        .background(if (isEditFocused) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape)
+                                        .focusable()
+                                        .testTag("edit_playlist_${playlist.id}")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Edit,
                                         contentDescription = "Редактировать плейлист",
-                                        tint = CinemaAmber
+                                        tint = if (isEditFocused) Color.White else CinemaAmber
                                     )
                                 }
 
+                                var isRefreshFocused by remember { mutableStateOf(false) }
                                 IconButton(
                                     onClick = { viewModel.refreshPlaylist(playlist.id) },
-                                    modifier = Modifier.testTag("refresh_playlist_${playlist.id}")
+                                    modifier = Modifier
+                                        .onFocusChanged { isRefreshFocused = it.isFocused }
+                                        .background(if (isRefreshFocused) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape)
+                                        .focusable()
+                                        .testTag("refresh_playlist_${playlist.id}")
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.Refresh,
                                         contentDescription = "Обновить записи",
-                                        tint = Color.White
+                                        tint = if (isRefreshFocused) CinemaAmber else Color.White
                                     )
                                 }
 
                                 if (!playlist.isBuiltIn) {
+                                    var isDeleteFocused by remember { mutableStateOf(false) }
                                     IconButton(
                                         onClick = { viewModel.deletePlaylist(playlist.id) },
-                                        modifier = Modifier.testTag("delete_playlist_${playlist.id}")
+                                        modifier = Modifier
+                                            .onFocusChanged { isDeleteFocused = it.isFocused }
+                                            .background(if (isDeleteFocused) LiveRed.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
+                                            .focusable()
+                                            .testTag("delete_playlist_${playlist.id}")
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Delete,
                                             contentDescription = "Удалить плейлист",
-                                            tint = LiveRed
+                                            tint = if (isDeleteFocused) Color.White else LiveRed
                                         )
                                     }
                                 }

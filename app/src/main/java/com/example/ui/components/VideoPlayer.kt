@@ -86,15 +86,20 @@ fun VideoPlayer(
     // Instantiate ExoPlayer safely
     val exoPlayer = remember(context) {
         try {
-            ExoPlayer.Builder(context.applicationContext).build().apply {
-                playWhenReady = true
-                repeatMode = Player.REPEAT_MODE_OFF
-            }
+            val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context.applicationContext)
+                .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
+            
+            ExoPlayer.Builder(context.applicationContext, renderersFactory)
+                .build()
+                .apply {
+                    playWhenReady = true
+                    repeatMode = Player.REPEAT_MODE_OFF
+                }
         } catch (e: Throwable) {
             Log.e("VideoPlayer", "Failed to build ExoPlayer instance", e)
             null
         }
-    }
+    } as ExoPlayer?
 
     // Set up Player listeners cleanly
     DisposableEffect(exoPlayer) {
@@ -222,17 +227,24 @@ fun VideoPlayer(
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     val keyCode = keyEvent.nativeKeyEvent.keyCode
-                    if (!showControls && (
-                        keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
-                        keyCode == KeyEvent.KEYCODE_ENTER ||
-                        keyCode == KeyEvent.KEYCODE_DPAD_UP ||
-                        keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
-                        keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
-                        keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
-                    )) {
-                        showControls = true
-                        true
-                    } else if (showControls && keyCode == KeyEvent.KEYCODE_BACK) {
+                    if (!showControls) {
+                        when (keyCode) {
+                            KeyEvent.KEYCODE_DPAD_LEFT -> {
+                                onPreviousChannel?.invoke()
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                                onNextChannel?.invoke()
+                                true
+                            }
+                            KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+                            KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                showControls = true
+                                true
+                            }
+                            else -> false
+                        }
+                    } else if (keyCode == KeyEvent.KEYCODE_BACK) {
                         showControls = false
                         true
                     } else false
@@ -377,16 +389,22 @@ fun VideoPlayer(
                             ) {
                                 if (isFullscreen) {
                                     // Easily exit fullscreen
+                                    var isBackFocused by remember { mutableStateOf(false) }
                                     IconButton(
                                         onClick = onToggleFullscreen,
                                         modifier = Modifier
-                                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                                            .onFocusChanged { isBackFocused = it.isFocused }
+                                            .background(
+                                                if (isBackFocused) CinemaAmber else Color.Black.copy(alpha = 0.5f), 
+                                                CircleShape
+                                            )
                                             .size(36.dp)
+                                            .focusable()
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.ArrowBack,
                                             contentDescription = "Выйти из полноэкранного режима",
-                                            tint = Color.White,
+                                            tint = if (isBackFocused) Color.Black else Color.White,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -482,6 +500,7 @@ fun VideoPlayer(
                                         .onFocusChanged { isPrevFocused = it.isFocused }
                                         .background(if (isPrevFocused) CinemaAmber else Color.Black.copy(alpha = 0.6f), CircleShape)
                                         .size(50.dp)
+                                        .focusable()
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.SkipPrevious,
@@ -503,6 +522,7 @@ fun VideoPlayer(
                                         .onFocusChanged { isPlayFocused = it.isFocused }
                                         .background(if (isPlayFocused) Color.White else CinemaAmber, CircleShape)
                                         .size(58.dp)
+                                        .focusable()
                                 ) {
                                     Icon(
                                         imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
@@ -520,6 +540,7 @@ fun VideoPlayer(
                                         .onFocusChanged { isNextFocused = it.isFocused }
                                         .background(if (isNextFocused) CinemaAmber else Color.Black.copy(alpha = 0.6f), CircleShape)
                                         .size(50.dp)
+                                        .focusable()
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.SkipNext,
@@ -588,6 +609,7 @@ fun VideoPlayer(
                                         .onFocusChanged { isFullFocused = it.isFocused }
                                         .background(if (isFullFocused) CinemaAmber else Color.Black.copy(alpha = 0.7f), CircleShape)
                                         .size(38.dp)
+                                        .focusable()
                                         .testTag("toggle_fullscreen_button")
                                 ) {
                                     Icon(
@@ -608,6 +630,7 @@ fun VideoPlayer(
                                         .onFocusChanged { isResizeFocused = it.isFocused }
                                         .background(if (isResizeFocused) SkyBlue else Color.Black.copy(alpha = 0.7f), CircleShape)
                                         .size(38.dp)
+                                        .focusable()
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.AspectRatio,

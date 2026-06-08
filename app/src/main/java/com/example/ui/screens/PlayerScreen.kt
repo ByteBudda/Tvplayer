@@ -325,7 +325,23 @@ private fun EPGSpoiler(selectedChannel: Channel?, archiveSchedule: List<ProgramE
             AnimatedVisibility(visible = isExpanded) {
                 LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(archiveSchedule) { program ->
-                        Text("${program.startTimeString} - ${program.title}", color = if (program.isArchive) SkyBlue else Color.White, style = MaterialTheme.typography.bodySmall, modifier = Modifier.clickable(enabled = program.isArchive) { viewModel.selectArchiveEpisode(program) })
+                        var isItemFocused by remember { mutableStateOf(false) }
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .onFocusChanged { isItemFocused = it.isFocused }
+                                .clickable(enabled = program.isArchive) { viewModel.selectArchiveEpisode(program) }
+                                .focusable(),
+                            color = if (isItemFocused) SlateFocus else Color.Transparent,
+                            shape = RoundedCornerShape(4.dp)
+                        ) {
+                            Text(
+                                text = "${program.startTimeString} - ${program.title}", 
+                                color = if (program.isArchive) SkyBlue else Color.White.copy(alpha = 0.6f), 
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(6.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -389,20 +405,51 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
 @Composable
 private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean, selected: Channel?, episodes: List<ProgramEpisode>, channels: List<Channel>, onEpg: (Boolean) -> Unit, onChannels: (Boolean) -> Unit, viewModel: AppViewModel) {
     AnimatedVisibility(visible = showEpg, enter = slideInVertically { -it }, exit = slideOutVertically { -it }) {
-        Box(modifier = Modifier.fillMaxWidth().height(300.dp).background(Color.Black.copy(alpha = 0.8f)).padding(24.dp).clickable { onEpg(false) }) {
-            LazyColumn {
+        Box(modifier = Modifier.fillMaxWidth().height(300.dp).background(Color.Black.copy(alpha = 0.9f)).padding(24.dp).clickable { onEpg(false) }) {
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(episodes) { ep ->
-                    Text("${ep.startTimeString} ${ep.title}", color = Color.White, modifier = Modifier.padding(vertical = 4.dp).clickable(enabled = ep.isArchive) { viewModel.selectArchiveEpisode(ep) })
+                    var isItemFocused by remember { mutableStateOf(false) }
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .onFocusChanged { isItemFocused = it.isFocused }
+                            .clickable(enabled = ep.isArchive) { viewModel.selectArchiveEpisode(ep) }
+                            .focusable(),
+                        color = if (isItemFocused) SlateFocus else Color.Transparent,
+                        shape = RoundedCornerShape(8.dp)
+                    ) {
+                        Text(
+                            text = "${ep.startTimeString} ${ep.title}", 
+                            color = if (isItemFocused) Color.White else Color.White.copy(alpha = 0.8f), 
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
                 }
             }
         }
     }
     AnimatedVisibility(visible = showChannels, enter = slideInVertically { it }, exit = slideOutVertically { it }, modifier = Modifier.align(Alignment.BottomCenter)) {
-        Box(modifier = Modifier.fillMaxWidth().height(400.dp).background(Color.Black.copy(alpha = 0.8f)).padding(16.dp)) {
-            LazyVerticalGrid(columns = GridCells.Adaptive(150.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().height(400.dp).background(Color.Black.copy(alpha = 0.9f)).padding(16.dp)) {
+            LazyVerticalGrid(columns = GridCells.Adaptive(160.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(channels) { ch ->
-                    Card(modifier = Modifier.clickable { viewModel.selectChannel(ch); onChannels(false) }, colors = CardDefaults.cardColors(containerColor = SlateCard)) {
-                        Text(ch.name, color = Color.White, modifier = Modifier.padding(12.dp), maxLines = 1)
+                    var isItemFocused by remember { mutableStateOf(false) }
+                    Card(
+                        modifier = Modifier
+                            .onFocusChanged { isItemFocused = it.isFocused }
+                            .clickable { viewModel.selectChannel(ch); onChannels(false) }
+                            .focusable(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isItemFocused) CinemaAmber else SlateCard
+                        ),
+                        border = if (isItemFocused) BorderStroke(2.dp, Color.White) else null
+                    ) {
+                        Text(
+                            ch.name, 
+                            color = if (isItemFocused) Color.Black else Color.White, 
+                            modifier = Modifier.padding(12.dp), 
+                            maxLines = 1,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
             }
