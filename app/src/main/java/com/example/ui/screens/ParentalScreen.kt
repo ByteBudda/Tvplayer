@@ -19,6 +19,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.ui.components.glassmorphism
 import com.example.ui.AppViewModel
 import com.example.ui.theme.CinemaAmber
 import com.example.ui.theme.LiveRed
@@ -65,11 +66,15 @@ fun ParentalScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 16.dp),
+                .padding(bottom = 16.dp)
+                .glassmorphism(
+                    shape = RoundedCornerShape(16.dp),
+                    backgroundColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                    borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                ),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
+                containerColor = Color.Transparent
             ),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(
@@ -208,9 +213,15 @@ fun ParentalScreen(
 
         // Info Alerts
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .glassmorphism(
+                    shape = RoundedCornerShape(12.dp),
+                    backgroundColor = LiveRed.copy(alpha = 0.05f),
+                    borderColor = LiveRed.copy(alpha = 0.1f)
+                ),
             colors = CardDefaults.cardColors(
-                containerColor = LiveRed.copy(alpha = 0.1f)
+                containerColor = Color.Transparent
             )
         ) {
             Row(

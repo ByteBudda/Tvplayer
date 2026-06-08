@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.ui.components.glassmorphism
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -354,14 +355,18 @@ fun PlaylistsScreen(
             onDismissRequest = { playlistToManageChannels = null }
         ) {
             Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.Transparent
+                ),
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.9f)
-                    .clip(RoundedCornerShape(24.dp)),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
-                ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                    .clip(RoundedCornerShape(24.dp))
+                    .glassmorphism(
+                        shape = RoundedCornerShape(24.dp),
+                        backgroundColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                        borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
+                    )
             ) {
                 Column(
                     modifier = Modifier
