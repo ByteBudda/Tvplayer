@@ -72,7 +72,14 @@ class AppRepository(
         return appDao.getChannelsByPlaylistFlow(playlistId)
     }
 
-    suspend fun insertPlaylist(name: String, url: String, type: String = "m3u"): Long = withContext(Dispatchers.IO) {
+    suspend fun insertPlaylist(name: String, rawUrl: String, type: String = "m3u"): Long = withContext(Dispatchers.IO) {
+        var url = rawUrl
+        // Auto-correct github blob links to raw
+        if (url.startsWith("https://github.com/") && url.contains("/blob/")) {
+            url = url.replace("https://github.com/", "https://raw.githubusercontent.com/")
+            url = url.replace("/blob/", "/")
+        }
+        
         val playlist = Playlist(
             name = name,
             url = url,

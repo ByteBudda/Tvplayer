@@ -58,7 +58,10 @@ object IptvParser {
                 // Temporary storage for tvgId and tvgName to be used when creating Channel
                 currentTvgId = tvgId
                 currentTvgName = tvgName
-            } else if (!line.startsWith("#") && (line.startsWith("http") || line.startsWith("rtmp") || line.contains("://"))) {
+            } else if (!line.startsWith("#") && !line.startsWith("<") && (line.startsWith("http") || line.startsWith("rtmp") || line.contains("://"))) {
+                // Ensure the line doesn't contain HTML tags that might match the URL pattern
+                if (line.contains("<") || line.contains(">")) return@forEach
+                
                 if (channels.size >= maxChannels) {
                     return@forEach
                 }
