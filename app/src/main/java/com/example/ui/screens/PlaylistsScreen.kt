@@ -970,6 +970,25 @@ private fun PlaylistsContent(
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Импорт")
                 }
+                
+                var isAddFocused by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = onAdd,
+                    modifier = Modifier
+                        .onFocusChanged { isAddFocused = it.isFocused }
+                        .border(
+                            if (isAddFocused) 2.dp else 0.dp,
+                            if (isAddFocused) Color.White else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .focusable(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CinemaAmber),
+                    border = BorderStroke(1.dp, CinemaAmber.copy(alpha = 0.5f))
+                ) {
+                    Icon(imageVector = Icons.Filled.Link, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Ссылка")
+                }
 
                 var isFabFocused by remember { mutableStateOf(false) }
                 FloatingActionButton(
