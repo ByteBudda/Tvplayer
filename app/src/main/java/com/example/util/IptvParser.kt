@@ -225,19 +225,33 @@ object IptvParser {
                                         val stopTimeStr = if (stopMs > 0) timeFormat.format(stopMs) else "--:--"
 
                                         val currentTime = System.currentTimeMillis()
-                                        val episode = ProgramEpisode(
-                                            title = progTitle!!,
-                                            description = progDesc,
-                                            startTimeString = startTimeStr,
-                                            endTimeString = stopTimeStr,
-                                            startTimeMs = startMs,
-                                            endTimeMs = stopMs,
-                                            isArchive = startMs < currentTime
-                                        )
+                                        val calendar = java.util.Calendar.getInstance()
+                                        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+                                        calendar.set(java.util.Calendar.MINUTE, 0)
+                                        calendar.set(java.util.Calendar.SECOND, 0)
+                                        calendar.set(java.util.Calendar.MILLISECOND, 0)
+                                        val startOfDayMs = calendar.timeInMillis
+                                        calendar.set(java.util.Calendar.HOUR_OF_DAY, 23)
+                                        calendar.set(java.util.Calendar.MINUTE, 59)
+                                        calendar.set(java.util.Calendar.SECOND, 59)
+                                        calendar.set(java.util.Calendar.MILLISECOND, 999)
+                                        val endOfDayMs = calendar.timeInMillis
                                         
-                                        val list = programs.getOrPut(progChannelId!!) { mutableListOf() }
-                                        if (list.size < 500) { // Increased limit for better EPG coverage
-                                            list.add(episode)
+                                        if (startMs >= startOfDayMs && startMs <= endOfDayMs) {
+                                            val episode = ProgramEpisode(
+                                                title = progTitle!!,
+                                                description = progDesc,
+                                                startTimeString = startTimeStr,
+                                                endTimeString = stopTimeStr,
+                                                startTimeMs = startMs,
+                                                endTimeMs = stopMs,
+                                                isArchive = startMs < currentTime
+                                            )
+                                            
+                                            val list = programs.getOrPut(progChannelId!!) { mutableListOf() }
+                                            if (list.size < 500) { // Increased limit for better EPG coverage
+                                                list.add(episode)
+                                            }
                                         }
                                     } catch (e: Exception) {
                                         Log.e(TAG, "Error parsing XMLTV programme timing", e)
