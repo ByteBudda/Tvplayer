@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.input.key.*
+import android.view.KeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -215,6 +218,27 @@ fun VideoPlayer(
                     Modifier.aspectRatio(16f / 9f)
                 }
             )
+            .onFocusChanged { if (it.isFocused) showControls = true }
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown) {
+                    val keyCode = keyEvent.nativeKeyEvent.keyCode
+                    if (!showControls && (
+                        keyCode == KeyEvent.KEYCODE_DPAD_CENTER ||
+                        keyCode == KeyEvent.KEYCODE_ENTER ||
+                        keyCode == KeyEvent.KEYCODE_DPAD_UP ||
+                        keyCode == KeyEvent.KEYCODE_DPAD_DOWN ||
+                        keyCode == KeyEvent.KEYCODE_DPAD_LEFT ||
+                        keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
+                    )) {
+                        showControls = true
+                        true
+                    } else if (showControls && keyCode == KeyEvent.KEYCODE_BACK) {
+                        showControls = false
+                        true
+                    } else false
+                } else false
+            }
+            .focusable()
     ) {
         if (streamUrl.isNullOrEmpty()) {
             // Visual Empty Placeholder

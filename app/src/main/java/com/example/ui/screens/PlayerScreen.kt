@@ -31,12 +31,14 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
+import android.content.res.Configuration
+import android.view.KeyEvent
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.view.KeyEvent
 import coil.compose.AsyncImage
 import com.example.data.Channel
 import com.example.data.ProgramEpisode
@@ -69,20 +71,18 @@ fun PlayerScreen(
     var pinInputValue by remember { mutableStateOf("") }
     var pinError by remember { mutableStateOf(false) }
 
-    // Full-screen toggle state
     val isFullscreen by viewModel.isFullscreen.collectAsState()
-    // Local visibility for fullscreen overlays
     var showFullscreenEpg by remember { mutableStateOf(false) }
     var showFullscreenChannels by remember { mutableStateOf(false) }
-    // EPG Accordion/Spoiler toggle state
     var isEpgExpanded by remember { mutableStateOf(false) }
 
-    // Sync local fullscreen state to ViewModel for platform-level system bar control
     LaunchedEffect(isFullscreen) {
         viewModel.setFullscreen(isFullscreen)
     }
 
-    // Filter channels based on chosen category
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
     val filteredChannels = remember(channels, selectedCategory) {
         when (selectedCategory) {
             "Все" -> channels
@@ -91,7 +91,6 @@ fun PlayerScreen(
         }
     }
 
-    // Auto-select first channel on launch if nothing is selected
     LaunchedEffect(channels) {
         if (selectedChannel == null && channels.isNotEmpty()) {
             val nonLockedChannel = channels.firstOrNull { !it.isLocked || !parentalEnabled }
@@ -99,7 +98,6 @@ fun PlayerScreen(
         }
     }
 
-    // Fast Channel switching lambda callbacks
     val onPreviousChannel = {
         if (filteredChannels.isNotEmpty()) {
             val index = filteredChannels.indexOfFirst { it.id == selectedChannel?.id }
@@ -120,7 +118,6 @@ fun PlayerScreen(
         }
     }
 
-    // Handle back press to exit overlays or fullscreen
     BackHandler(enabled = isFullscreen) {
         if (showFullscreenEpg) {
             showFullscreenEpg = false
@@ -131,694 +128,301 @@ fun PlayerScreen(
         }
     }
 
+    val allCategories = remember(categories) { listOf("Все", "★ Избранные") + categories }
+
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(if (isFullscreen) Color.Black else MaterialTheme.colorScheme.background)
-        ) {
-            // SHARED VIDEO PLAYER SECTION
-            VideoPlayer(
-                streamUrl = when (playMode) {
-                    is AppViewModel.PlayMediaMode.ArchivePlay -> {
-                        val base = selectedChannel?.streamUrl
-                        if (base != null) {
-                            val archiveTs = (playMode as AppViewModel.PlayMediaMode.ArchivePlay).episode.startTimeMs / 1000
-                            "$base?utc=$archiveTs"
-                        } else {
-                            null
-                        }
+        if (isLandscape && !isFullscreen) {
+            Row(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                Box(modifier = Modifier.weight(0.6f)) {
+                    VideoPlayer(
+                        streamUrl = getStreamUrl(playMode, selectedChannel),
+                        title = selectedChannel?.name ?: "ТВ Плеер",
+                        logoUrl = selectedChannel?.logoUrl,
+                        mode = playMode,
+                        isFullscreen = isFullscreen,
+                        resizeMode = resizeMode,
+                        onToggleFullscreen = { viewModel.setFullscreen(!isFullscreen) },
+                        onToggleResizeMode = { toggleResizeMode(resizeMode, viewModel) },
+                        onPreviousChannel = onPreviousChannel,
+                        onNextChannel = onNextChannel,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
+                Column(
+                    modifier = Modifier
+                        .weight(0.4f)
+                        .fillMaxHeight()
+                        .padding(top = 8.dp)
+                ) {
+                    CategorySelector(allCategories, selectedCategory, viewModel)
+                    ChannelsList(filteredChannels, selectedChannel, parentalEnabled, isParentalUnlocked, viewModel) { ch ->
+                        showPinDialogForChannel = ch
+                        pinInputValue = ""
+                        pinError = false
                     }
-                    is AppViewModel.PlayMediaMode.DirectLive -> selectedChannel?.streamUrl
-                },
-                title = selectedChannel?.name ?: "ТВ Плеер",
-                logoUrl = selectedChannel?.logoUrl,
-                mode = playMode,
-                isFullscreen = isFullscreen,
-                resizeMode = resizeMode,
-                onToggleFullscreen = { viewModel.setFullscreen(!isFullscreen) },
-                onToggleResizeMode = {
-                    val next = when (resizeMode) {
-                        0 -> 3
-                        3 -> 4
-                        else -> 0
-                    }
-                    viewModel.setVideoResizeMode(next)
-                },
-                onPreviousChannel = onPreviousChannel,
-                onNextChannel = onNextChannel,
-                modifier = if (isFullscreen) {
-                    Modifier.weight(1f)
-                        .background(Color.Black)
-                        .pointerInput(Unit) {
-                            detectVerticalDragGestures { change, dragAmount ->
-                                change.consume()
-                                if (dragAmount < -20) { // Swipe Up
-                                    showFullscreenChannels = true
-                                    showFullscreenEpg = false
-                                } else if (dragAmount > 20) { // Swipe Down
-                                    showFullscreenEpg = true
-                                    showFullscreenChannels = false
-                                }
-                            }
-                        }
-                        .onKeyEvent { keyEvent ->
-                            if (keyEvent.type == KeyEventType.KeyDown) {
-                                when (keyEvent.nativeKeyEvent.keyCode) {
-                                    KeyEvent.KEYCODE_DPAD_UP -> {
-                                        showFullscreenEpg = true
-                                        showFullscreenChannels = false
-                                        true
-                                    }
-                                    KeyEvent.KEYCODE_DPAD_DOWN -> {
+                }
+            }
+        } else {
+            Column(
+                modifier = modifier
+                    .fillMaxSize()
+                    .background(if (isFullscreen) Color.Black else MaterialTheme.colorScheme.background)
+            ) {
+                VideoPlayer(
+                    streamUrl = getStreamUrl(playMode, selectedChannel),
+                    title = selectedChannel?.name ?: "ТВ Плеер",
+                    logoUrl = selectedChannel?.logoUrl,
+                    mode = playMode,
+                    isFullscreen = isFullscreen,
+                    resizeMode = resizeMode,
+                    onToggleFullscreen = { viewModel.setFullscreen(!isFullscreen) },
+                    onToggleResizeMode = { toggleResizeMode(resizeMode, viewModel) },
+                    onPreviousChannel = onPreviousChannel,
+                    onNextChannel = onNextChannel,
+                    modifier = if (isFullscreen) {
+                        Modifier.weight(1f)
+                            .background(Color.Black)
+                            .pointerInput(Unit) {
+                                detectVerticalDragGestures { change, dragAmount ->
+                                    change.consume()
+                                    if (dragAmount < -20) {
                                         showFullscreenChannels = true
                                         showFullscreenEpg = false
-                                        true
+                                    } else if (dragAmount > 20) {
+                                        showFullscreenEpg = true
+                                        showFullscreenChannels = false
                                     }
-                                    KeyEvent.KEYCODE_BACK -> {
-                                        if (showFullscreenEpg || showFullscreenChannels) {
-                                            showFullscreenEpg = false
+                                }
+                            }
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown) {
+                                    when (keyEvent.nativeKeyEvent.keyCode) {
+                                        KeyEvent.KEYCODE_DPAD_UP -> {
+                                            showFullscreenEpg = true
                                             showFullscreenChannels = false
                                             true
-                                        } else {
-                                            false
                                         }
+                                        KeyEvent.KEYCODE_DPAD_DOWN -> {
+                                            showFullscreenChannels = true
+                                            showFullscreenEpg = false
+                                            true
+                                        }
+                                        KeyEvent.KEYCODE_BACK -> {
+                                            if (showFullscreenEpg || showFullscreenChannels) {
+                                                showFullscreenEpg = false
+                                                showFullscreenChannels = false
+                                                true
+                                            } else false
+                                        }
+                                        else -> false
                                     }
-                                    else -> false
-                                }
-                            } else false
-                        }
-                        .focusable()
-                } else {
-                    Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                }
-            )
-
-            if (!isFullscreen) {
-                // NORMAL VIEW CONTENTS
-                // 2. TIMESIFT ARCHIVE BANNER
-                if (playMode is AppViewModel.PlayMediaMode.ArchivePlay) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(SkyBlue.copy(alpha = 0.2f))
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.History,
-                                    contentDescription = "Архив",
-                                    tint = SkyBlue
-                                )
-                                Text(
-                                    text = "Вы смотрите запись передачи из архива",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.White
-                                )
+                                } else false
                             }
-                            Button(
-                                onClick = { viewModel.switchBackToLive() },
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = LiveRed,
-                                    contentColor = Color.White
-                                ),
-                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                shape = RoundedCornerShape(4.dp),
-                                modifier = Modifier.height(30.dp)
-                            ) {
-                                Text("Вернуться в эфир", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
+                            .focusable()
+                    } else {
+                        Modifier.fillMaxWidth().aspectRatio(16f / 9f)
                     }
-                }
+                )
 
-                // 3. EXPANDABLE SPOILER (EPG / TV ARCHIVE GUIDE)
-                var isSpoilerFocused by remember { mutableStateOf(false) }
-                Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                                    .onFocusChanged { isSpoilerFocused = it.isFocused }
-                                    .focusable()
-                                    .testTag("epg_spoiler_card"),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (isSpoilerFocused) SlateFocus else SlateCard
-                                ),
-                                shape = RoundedCornerShape(12.dp),
-                                border = if (isSpoilerFocused) {
-                                    BorderStroke(2.dp, Color.White)
-                                } else {
-                                    BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
-                                }
-                            ) {
-                                Column {
-                                    // Spoiler Header
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { isEpgExpanded = !isEpgExpanded }
-                                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.CalendarMonth,
-                                                contentDescription = null,
-                                                tint = CinemaAmber,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                            Text(
-                                                text = selectedChannel?.let { "Телепрограмма и архив: ${it.name}" } ?: "Телепрограмма и архив передач",
-                                                color = Color.White,
-                                                style = MaterialTheme.typography.bodyLarge,
-                                                fontWeight = FontWeight.SemiBold,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                        }
-                                        Icon(
-                                            imageVector = if (isEpgExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                                            contentDescription = if (isEpgExpanded) "Свернуть" else "Развернуть",
-                                            tint = Color.White.copy(alpha = 0.7f)
-                                        )
-                                    }
-
-                                    // Expanded EPG list
-                                    AnimatedVisibility(
-                                        visible = isEpgExpanded,
-                                        enter = expandVertically() + fadeIn(),
-                                        exit = shrinkVertically() + fadeOut()
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .heightIn(max = 220.dp)
-                                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                                        ) {
-                                            LazyColumn(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                if (archiveSchedule.isEmpty()) {
-                                                    item {
-                                                        Box(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .padding(vertical = 16.dp),
-                                                            contentAlignment = Alignment.Center
-                                                        ) {
-                                                            Text(
-                                                                "Телепрограмма недоступна",
-                                                                color = Color.Gray,
-                                                                style = MaterialTheme.typography.bodyMedium
-                                                            )
-                                                        }
-                                                    }
-                                                } else {
-                                                    items(archiveSchedule) { program ->
-                                                        Card(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .clickable(enabled = program.isArchive) {
-                                                                    viewModel.selectArchiveEpisode(program)
-                                                                },
-                                                            colors = CardDefaults.cardColors(
-                                                                containerColor = if (program.isArchive) SlateFocus else Color.Transparent
-                                                            )
-                                                        ) {
-                                                            Column(
-                                                                modifier = Modifier.padding(8.dp)
-                                                            ) {
-                                                                Row(
-                                                                    modifier = Modifier.fillMaxWidth(),
-                                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                                    verticalAlignment = Alignment.CenterVertically
-                                                                ) {
-                                                                    Text(
-                                                                        text = "${program.startTimeString} - ${program.endTimeString}",
-                                                                        color = if (program.isArchive) SkyBlue else Color.White.copy(alpha = 0.5f),
-                                                                        style = MaterialTheme.typography.labelSmall,
-                                                                        fontWeight = FontWeight.Bold
-                                                                    )
-                                                                    
-                                                                    if (program.isArchive) {
-                                                                        Box(
-                                                                            modifier = Modifier
-                                                                                .clip(RoundedCornerShape(4.dp))
-                                                                                .background(SkyBlue.copy(alpha = 0.15f))
-                                                                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                                                                        ) {
-                                                                            Text(
-                                                                                "ЗАПИСЬ ТВ",
-                                                                                color = SkyBlue,
-                                                                                style = MaterialTheme.typography.labelSmall,
-                                                                                fontWeight = FontWeight.Bold
-                                                                            )
-                                                                        }
-                                                                    }
-                                                                }
-                                                                
-                                                                Spacer(modifier = Modifier.height(4.dp))
-                                                                
-                                                                Text(
-                                                                    text = program.title,
-                                                                    color = Color.White,
-                                                                    style = MaterialTheme.typography.bodySmall,
-                                                                    fontWeight = FontWeight.SemiBold,
-                                                                    maxLines = 2,
-                                                                    overflow = TextOverflow.Ellipsis
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                // 4. CATEGORY SELECTOR TABS
-                val allCategories = remember(categories) { listOf("Все", "★ Избранные") + categories }
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(allCategories) { category ->
-                        val isSelected = selectedCategory == category
-                        var isFocused by remember { mutableStateOf(false) }
-                        
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(16.dp))
-                                .onFocusChanged { isFocused = it.isFocused }
-                                .background(if (isSelected) MaterialTheme.colorScheme.primary else SlateCard)
-                                .then(
-                                    if (isSelected || isFocused) {
-                                        Modifier.border(
-                                            androidx.compose.foundation.BorderStroke(2.dp, if (isFocused) Color.White else Color.Transparent),
-                                            RoundedCornerShape(16.dp)
-                                        )
-                                    } else {
-                                        Modifier.background(SlateCard).border(
-                                            androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
-                                            RoundedCornerShape(16.dp)
-                                        )
-                                    }
-                                )
-                                .clickable { viewModel.selectCategory(category) }
-                                .focusable()
-                                .padding(horizontal = 16.dp, vertical = 8.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = category,
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimary else Color.White.copy(alpha = 0.8f),
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                if (!isFullscreen) {
+                    if (playMode is AppViewModel.PlayMediaMode.ArchivePlay) {
+                        ArchiveBanner(viewModel)
                     }
-                }
-
-                // 5. CHANNELS LISTING
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(bottom = 16.dp)
-                ) {
-                    if (filteredChannels.isEmpty()) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 42.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.TvOff,
-                                    contentDescription = "Пусто",
-                                    tint = Color.Gray,
-                                    modifier = Modifier.size(48.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    "Нет каналов в данной категории",
-                                    color = Color.Gray,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                    }
-                    
-                    items(filteredChannels) { channel ->
-                        val isSelected = selectedChannel?.id == channel.id
-                        var isFocused by remember { mutableStateOf(false) }
-                        
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onFocusChanged { isFocused = it.isFocused }
-                                .combinedClickable(
-                                    onClick = {
-                                        if (channel.isLocked && parentalEnabled && !isParentalUnlocked) {
-                                            showPinDialogForChannel = channel
-                                            pinInputValue = ""
-                                            pinError = false
-                                        } else {
-                                            viewModel.selectChannel(channel)
-                                        }
-                                    },
-                                    onLongClick = {
-                                        viewModel.toggleChannelLock(channel)
-                                    }
-                                )
-                                .focusable()
-                                .testTag("channel_card_${channel.id}"),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected || isFocused) SlateFocus else SlateCard
-                            ),
-                            border = if (isSelected || isFocused) {
-                                BorderStroke(2.dp, if (isFocused) Color.White else CinemaAmber)
-                            } else {
-                                BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
-                            },
-                            shape = RoundedCornerShape(16.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(12.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Logo AsyncImage with Letter Circle fallback
-                                Box(
-                                    modifier = Modifier
-                                        .size(44.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    if (!channel.logoUrl.isNullOrEmpty()) {
-                                        AsyncImage(
-                                            model = channel.logoUrl,
-                                            contentDescription = channel.name,
-                                            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(4.dp)
-                                        )
-                                    } else {
-                                        Text(
-                                            text = channel.name.take(1).uppercase(),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                }
-
-                                Spacer(modifier = Modifier.width(12.dp))
-
-                                Column(
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text(
-                                        text = channel.name,
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Text(
-                                        text = channel.category ?: "Эфир",
-                                        color = Color.White.copy(alpha = 0.6f),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-
-                                // Badges
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                ) {
-                                    if (channel.isLocked && parentalEnabled) {
-                                        IconButton(
-                                            onClick = { viewModel.toggleChannelLock(channel) },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Lock,
-                                                contentDescription = "Убрать замок",
-                                                tint = LiveRed,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    } else if (parentalEnabled) {
-                                        IconButton(
-                                            onClick = { viewModel.toggleChannelLock(channel) },
-                                            modifier = Modifier.size(36.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.LockOpen,
-                                                contentDescription = "Установить замок",
-                                                tint = Color.Gray.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-
-                                    IconButton(
-                                        onClick = { viewModel.toggleFavorite(channel) },
-                                        modifier = Modifier.size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (channel.isFavorite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                                            contentDescription = "В избранное",
-                                            tint = if (channel.isFavorite) CinemaAmber else Color.Gray,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    EPGSpoiler(selectedChannel, archiveSchedule, isEpgExpanded, { isEpgExpanded = it }, viewModel)
+                    CategorySelector(allCategories, selectedCategory, viewModel)
+                    ChannelsList(filteredChannels, selectedChannel, parentalEnabled, isParentalUnlocked, viewModel) { ch ->
+                        showPinDialogForChannel = ch
+                        pinInputValue = ""
+                        pinError = false
                     }
                 }
             }
         }
 
-        // FULLSCREEN OVERLAYS
         if (isFullscreen) {
-            // OVERLAY: Program Info (EPG)
-            AnimatedVisibility(
-                visible = showFullscreenEpg,
-                enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
-                modifier = Modifier.align(Alignment.TopCenter)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 300.dp)
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .clickable { showFullscreenEpg = false }
-                        .padding(24.dp)
-                ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(
-                            text = "Программа передач: ${selectedChannel?.name}",
-                            style = MaterialTheme.typography.headlineSmall,
-                            color = CinemaAmber,
-                            fontWeight = FontWeight.Bold
-                        )
-                        LazyColumn(modifier = Modifier.weight(1f)) {
-                            items(archiveSchedule) { program ->
-                                var isItemFocused by remember { mutableStateOf(false) }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .onFocusChanged { isItemFocused = it.isFocused }
-                                        .clickable(enabled = program.isArchive) {
-                                            viewModel.selectArchiveEpisode(program)
-                                        }
-                                        .focusable()
-                                        .padding(vertical = 4.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Text(
-                                        text = program.startTimeString,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isItemFocused) CinemaAmber else SkyBlue,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = program.title,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = if (isItemFocused) CinemaAmber else Color.White
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            FullscreenOverlays(showFullscreenEpg, showFullscreenChannels, selectedChannel, archiveSchedule, filteredChannels, { showFullscreenEpg = it }, { showFullscreenChannels = it }, viewModel)
+        }
 
-            // OVERLAY: Channel List
-            AnimatedVisibility(
-                visible = showFullscreenChannels,
-                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
-                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
-                modifier = Modifier.align(Alignment.BottomCenter)
+        if (showPinDialogForChannel != null) {
+            PinDialog(showPinDialogForChannel, pinInputValue, pinError, { pinInputValue = it; pinError = false }, { showPinDialogForChannel = null }, viewModel)
+        }
+    }
+}
+
+private fun getStreamUrl(playMode: AppViewModel.PlayMediaMode, selectedChannel: Channel?): String? {
+    return when (playMode) {
+        is AppViewModel.PlayMediaMode.ArchivePlay -> {
+            val base = selectedChannel?.streamUrl
+            if (base != null) {
+                val archiveTs = playMode.episode.startTimeMs / 1000
+                "$base?utc=$archiveTs"
+            } else null
+        }
+        is AppViewModel.PlayMediaMode.DirectLive -> selectedChannel?.streamUrl
+    }
+}
+
+private fun toggleResizeMode(current: Int, viewModel: AppViewModel) {
+    val next = when (current) {
+        0 -> 3
+        3 -> 4
+        else -> 0
+    }
+    viewModel.setVideoResizeMode(next)
+}
+
+@Composable
+private fun ArchiveBanner(viewModel: AppViewModel) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(SkyBlue.copy(alpha = 0.2f))
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Icon(imageVector = Icons.Filled.History, contentDescription = null, tint = SkyBlue)
+                Text("Вы смотрите запись из архива", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+            }
+            Button(
+                onClick = { viewModel.switchBackToLive() },
+                colors = ButtonDefaults.buttonColors(containerColor = LiveRed),
+                shape = RoundedCornerShape(4.dp),
+                modifier = Modifier.height(30.dp)
             ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 400.dp)
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(bottom = 16.dp)
-                ) {
-                    Column {
-                        Row(
-                            modifier = Modifier.fillMaxWidth().padding(16.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("Выбор канала", color = Color.White, style = MaterialTheme.typography.titleLarge)
-                            IconButton(onClick = { showFullscreenChannels = false }) {
-                                Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
-                            }
-                        }
-                        
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(minSize = 160.dp),
-                            contentPadding = PaddingValues(16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            items(filteredChannels) { channel ->
-                                val isNowSelected = selectedChannel?.id == channel.id
-                                var isOverlayFocused by remember { mutableStateOf(false) }
-                                
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .onFocusChanged { isOverlayFocused = it.isFocused }
-                                        .clickable { 
-                                            viewModel.selectChannel(channel)
-                                            showFullscreenChannels = false
-                                        }
-                                        .focusable(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = if (isNowSelected || isOverlayFocused) SlateFocus else SlateCard.copy(alpha = 0.6f)
-                                    ),
-                                    border = BorderStroke(2.dp, if (isOverlayFocused) Color.White else if (isNowSelected) CinemaAmber else Color.White.copy(alpha = 0.1f)),
-                                    shape = RoundedCornerShape(16.dp)
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AsyncImage(
-                                            model = channel.logoUrl,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(32.dp).clip(RoundedCornerShape(4.dp))
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = channel.name,
-                                            color = Color.White,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                Text("В эфир", style = MaterialTheme.typography.labelMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EPGSpoiler(selectedChannel: Channel?, archiveSchedule: List<ProgramEpisode>, isExpanded: Boolean, onToggle: (Boolean) -> Unit, viewModel: AppViewModel) {
+    var isFocused by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { isFocused = it.isFocused }.focusable(),
+        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else SlateCard),
+        border = BorderStroke(if (isFocused) 2.dp else 1.dp, if (isFocused) Color.White else Color.White.copy(alpha = 0.05f))
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable { onToggle(!isExpanded) }.padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(selectedChannel?.let { "EPG: ${it.name}" } ?: "Программа передач", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Icon(imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = Color.White)
+            }
+            AnimatedVisibility(visible = isExpanded) {
+                LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(archiveSchedule) { program ->
+                        Text("${program.startTimeString} - ${program.title}", color = if (program.isArchive) SkyBlue else Color.White, style = MaterialTheme.typography.bodySmall, modifier = Modifier.clickable(enabled = program.isArchive) { viewModel.selectArchiveEpisode(program) })
                     }
                 }
             }
         }
     }
+}
 
-    // Parental PIN Entry Dialog before playing channel
-    if (showPinDialogForChannel != null) {
-        AlertDialog(
-            onDismissRequest = { showPinDialogForChannel = null },
-            title = { Text("Родительский контроль") },
-            text = {
-                Column {
-                    Text("Этот канал защищен PIN-кодом. Введите код для разблокировки:")
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = pinInputValue,
-                        onValueChange = { 
-                            pinInputValue = it
-                            pinError = false
-                        },
-                        label = { Text("Ведите PIN") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        singleLine = true,
-                        isError = pinError,
-                        modifier = Modifier.fillMaxWidth().testTag("parental_pin_field")
-                    )
-                    if (pinError) {
-                        Text(
-                            text = "Неверный PIN-код",
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp)
-                        )
+@Composable
+private fun CategorySelector(categories: List<String>, selected: String, viewModel: AppViewModel) {
+    LazyRow(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        items(categories) { category ->
+            val isSel = selected == category
+            var isFoc by remember { mutableStateOf(false) }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .onFocusChanged { isFoc = it.isFocused }
+                    .background(if (isSel) MaterialTheme.colorScheme.primary else SlateCard)
+                    .border(BorderStroke(if (isFoc) 2.dp else 1.dp, if (isFoc) Color.White else Color.Transparent), RoundedCornerShape(16.dp))
+                    .clickable { viewModel.selectCategory(category) }
+                    .focusable()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(category, color = if (isSel) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: Boolean, unlocked: Boolean, viewModel: AppViewModel, onPin: (Channel) -> Unit) {
+    LazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+        items(channels) { channel ->
+            val isSel = selected?.id == channel.id
+            var isFoc by remember { mutableStateOf(false) }
+            Card(
+                modifier = Modifier.fillMaxWidth().onFocusChanged { isFoc = it.isFocused }.combinedClickable(
+                    onClick = { if (channel.isLocked && parental && !unlocked) onPin(channel) else viewModel.selectChannel(channel) },
+                    onLongClick = { viewModel.toggleChannelLock(channel) }
+                ).focusable(),
+                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) SlateFocus else SlateCard),
+                border = BorderStroke(2.dp, if (isFoc) Color.White else if (isSel) CinemaAmber else Color.Transparent)
+            ) {
+                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                        AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(4.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Text(channel.name, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    if (channel.isLocked) Icon(Icons.Default.Lock, contentDescription = null, tint = LiveRed, modifier = Modifier.size(16.dp))
+                    IconButton(onClick = { viewModel.toggleFavorite(channel) }) {
+                        Icon(if (channel.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = null, tint = CinemaAmber)
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val correct = viewModel.unlockParentalSession(pinInputValue)
-                        if (correct) {
-                            val ch = showPinDialogForChannel
-                            if (ch != null) {
-                                viewModel.selectChannel(ch)
-                            }
-                            showPinDialogForChannel = null
-                        } else {
-                            pinError = true
-                        }
-                    },
-                    modifier = Modifier.testTag("parental_pin_confirm")
-                ) {
-                    Text("Войти")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showPinDialogForChannel = null }) {
-                    Text("Отмена")
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean, selected: Channel?, episodes: List<ProgramEpisode>, channels: List<Channel>, onEpg: (Boolean) -> Unit, onChannels: (Boolean) -> Unit, viewModel: AppViewModel) {
+    AnimatedVisibility(visible = showEpg, enter = slideInVertically { -it }, exit = slideOutVertically { -it }) {
+        Box(modifier = Modifier.fillMaxWidth().height(300.dp).background(Color.Black.copy(alpha = 0.8f)).padding(24.dp).clickable { onEpg(false) }) {
+            LazyColumn {
+                items(episodes) { ep ->
+                    Text("${ep.startTimeString} ${ep.title}", color = Color.White, modifier = Modifier.padding(vertical = 4.dp).clickable(enabled = ep.isArchive) { viewModel.selectArchiveEpisode(ep) })
                 }
             }
-        )
+        }
     }
+    AnimatedVisibility(visible = showChannels, enter = slideInVertically { it }, exit = slideOutVertically { it }, modifier = Modifier.align(Alignment.BottomCenter)) {
+        Box(modifier = Modifier.fillMaxWidth().height(400.dp).background(Color.Black.copy(alpha = 0.8f)).padding(16.dp)) {
+            LazyVerticalGrid(columns = GridCells.Adaptive(150.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(channels) { ch ->
+                    Card(modifier = Modifier.clickable { viewModel.selectChannel(ch); onChannels(false) }, colors = CardDefaults.cardColors(containerColor = SlateCard)) {
+                        Text(ch.name, color = Color.White, modifier = Modifier.padding(12.dp), maxLines = 1)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PinDialog(channel: Channel?, pin: String, error: Boolean, onPinChange: (String) -> Unit, onDismiss: () -> Unit, viewModel: AppViewModel) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("PIN") },
+        text = {
+            Column {
+                OutlinedTextField(value = pin, onValueChange = onPinChange, visualTransformation = PasswordVisualTransformation(), isError = error)
+                if (error) Text("Error", color = Color.Red)
+            }
+        },
+        confirmButton = {
+            Button(onClick = { if (viewModel.unlockParentalSession(pin)) { channel?.let { viewModel.selectChannel(it) }; onDismiss() } }) { Text("OK") }
+        }
+    )
 }
