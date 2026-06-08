@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -982,17 +983,20 @@ private fun PlaylistCard(
     viewModel: AppViewModel
 ) {
     var isCardFocused by remember { mutableStateOf(false) }
+    val isDark = isSystemInDarkTheme()
+    val backgroundColor = if (isDark) SlateCard else MaterialTheme.colorScheme.surface
+    val highlightColor = if (isDark) SlateFocus else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .onFocusChanged { isCardFocused = it.isFocused }
             .border(
                 if (isCardFocused) 2.dp else 0.dp,
-                if (isCardFocused) Color.White else Color.Transparent,
+                if (isCardFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
                 RoundedCornerShape(16.dp)
             )
             .focusable(),
-        colors = CardDefaults.cardColors(containerColor = if (isCardFocused) SlateFocus else SlateCard),
+        colors = CardDefaults.cardColors(containerColor = if (isCardFocused) highlightColor else backgroundColor),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
