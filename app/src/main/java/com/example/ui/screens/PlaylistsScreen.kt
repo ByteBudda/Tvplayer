@@ -65,6 +65,7 @@ fun PlaylistsScreen(
     var epgName by remember { mutableStateOf("") }
     var epgUrl by remember { mutableStateOf("") }
     var isEpgInputError by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -163,6 +164,7 @@ fun PlaylistsScreen(
                 },
                 onRefresh = { viewModel.refreshPlaylist(it.id) },
                 onDelete = { viewModel.deletePlaylist(it.id) },
+                onShowAbout = { showAboutDialog = true },
                 viewModel = viewModel
             )
         } else {
@@ -882,6 +884,28 @@ fun PlaylistsScreen(
             }
         )
     }
+
+    // About Dialog
+    if (showAboutDialog) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showAboutDialog = false }
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("О программе", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text("Автор: bytebudda")
+                    Text("Это опенсорс приложение, плейлисты из открытых источников и никакой ответственности мы не несём за контент.")
+                    Button(onClick = { showAboutDialog = false }, modifier = Modifier.align(Alignment.End)) {
+                        Text("Закрыть")
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -894,6 +918,7 @@ private fun PlaylistsContent(
     onEdit: (Playlist) -> Unit,
     onRefresh: (Playlist) -> Unit,
     onDelete: (Playlist) -> Unit,
+    onShowAbout: () -> Unit,
     viewModel: AppViewModel
 ) {
     Column {
@@ -917,6 +942,10 @@ private fun PlaylistsContent(
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                IconButton(onClick = onShowAbout) {
+                    Icon(imageVector = Icons.Default.Info, contentDescription = "О программе", tint = MaterialTheme.colorScheme.onBackground)
+                }
+
                 var isImportFocused by remember { mutableStateOf(false) }
                 OutlinedButton(
                     onClick = onImport,
