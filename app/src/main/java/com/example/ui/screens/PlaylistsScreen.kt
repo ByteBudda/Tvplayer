@@ -374,17 +374,12 @@ fun PlaylistsScreen(
         ) {
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = Color.Transparent
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
+                shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.9f)
-                    .clip(RoundedCornerShape(24.dp))
-                    .glassmorphism(
-                        shape = RoundedCornerShape(24.dp),
-                        backgroundColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
-                        borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)
-                    )
             ) {
                 Column(
                     modifier = Modifier
