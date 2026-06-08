@@ -272,6 +272,102 @@ object IptvParser {
         return XmlParseResult(channels, programs, epgChannelNames)
     }
 
+    /**
+     * Efficiently parses only programs for a specific channel from an XML stream.
+     */
+    fun parseEpgForChannel(inputStream: java.io.InputStream, channelIdOrName: String): List<ProgramEpisode> {
+        val programs = mutableListOf<ProgramEpisode>()
+        try {
+            val parser = Xml.newPullParser()
+            parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+            parser.setInput(inputStream, "UTF-8")
+
+            var eventType = parser.eventType
+            var currentTagName: String? = null
+            
+            var progStart: String? = null
+            var progStop: String? = null
+            var progChannelId: String? = null
+            var progTitle: String? = null
+            var progDesc: String? = null
+
+            val xmltvDateFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            
+            val currentTime = System.currentTimeMillis()
+            // Using the same timezone logic for consistency
+            val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("GMT+3"))
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+            calendar.set(java.util.Calendar.MINUTE, 0)
+            calendar.set(java.util.Calendar.SECOND, 0)
+            calendar.set(java.util.Calendar.MILLISECOND, 0)
+            val startOfDayMs = calendar.timeInMillis
+            calendar.set(java.util.Calendar.HOUR_OF_DAY, 23)
+            calendar.set(java.util.Calendar.MINUTE, 59)
+            calendar.set(java.util.Calendar.SECOND, 59)
+            calendar.set(java.util.Calendar.MILLISECOND, 999)
+            val endOfDayMs = calendar.timeInMillis
+
+            while (eventType != XmlPullParser.END_DOCUMENT) {
+                when (eventType) {
+                    XmlPullParser.START_TAG -> {
+                        currentTagName = parser.name
+                        if (currentTagName == "programme") {
+                            progStart = parser.getAttributeValue(null, "start")
+                            progStop = parser.getAttributeValue(null, "stop")
+                            progChannelId = parser.getAttributeValue(null, "channel")
+                            progTitle = null
+                            progDesc = null
+                        }
+                    }
+                    XmlPullParser.TEXT -> {
+                        val text = parser.text.trim()
+                        if (text.isNotEmpty() && currentTagName != null) {
+                            when (currentTagName) {
+                                "title" -> progTitle = text
+                                "desc" -> progDesc = text
+                            }
+                        }
+                    }
+                    XmlPullParser.END_TAG -> {
+                        if (parser.name == "programme") {
+                            // Check if this programme is for our channel
+                            if (progChannelId == channelIdOrName && progTitle != null) {
+                                try {
+                                    val startMs = progStart?.let { parseXmltvDate(it, xmltvDateFormat) } ?: 0L
+                                    val stopMs = progStop?.let { parseXmltvDate(it, xmltvDateFormat) } ?: 0L
+                                    
+                                    // Filter by current day
+                                    if (startMs >= startOfDayMs && startMs <= endOfDayMs) {
+                                        programs.add(
+                                            ProgramEpisode(
+                                                title = progTitle!!,
+                                                description = progDesc,
+                                                startTimeString = if (startMs > 0) timeFormat.format(startMs) else "--:--",
+                                                endTimeString = if (stopMs > 0) timeFormat.format(stopMs) else "--:--",
+                                                startTimeMs = startMs,
+                                                endTimeMs = stopMs,
+                                                isArchive = startMs < currentTime
+                                            )
+                                        )
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Error parsing XMLTV programme timing", e)
+                                }
+                            }
+                            progChannelId = null
+                        }
+                        currentTagName = null
+                    }
+                }
+                eventType = parser.next()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error parsing XML for channel: $channelIdOrName", e)
+        }
+        return programs.sortedBy { it.startTimeMs }
+    }
+
     private fun parseXmltvDate(dateStr: String, format: SimpleDateFormat): Long {
         return try {
             format.parse(dateStr)?.time ?: 0L
