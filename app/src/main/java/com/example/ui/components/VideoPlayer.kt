@@ -44,6 +44,9 @@ import com.example.ui.theme.CinemaAmber
 import com.example.ui.theme.LiveRed
 import com.example.ui.theme.SkyBlue
 
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayer(
@@ -60,6 +63,7 @@ fun VideoPlayer(
     onNextChannel: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
+    val focusRequester = remember { FocusRequester() }
     var isPlaying by remember { mutableStateOf(true) }
     var isLoading by remember { mutableStateOf(false) }
     var hasError by remember { mutableStateOf(false) }
@@ -156,10 +160,13 @@ fun VideoPlayer(
     }
 
     // Auto-hide controls panel
-    LaunchedEffect(showControls, isPlaying) {
+    LaunchedEffect(showControls, isPlaying, isFullscreen) {
         if (showControls && isPlaying) {
             kotlinx.coroutines.delay(4000)
             showControls = false
+        }
+        if (!showControls && isFullscreen) {
+            focusRequester.requestFocus()
         }
     }
 
@@ -223,7 +230,7 @@ fun VideoPlayer(
                     Modifier.aspectRatio(16f / 9f)
                 }
             )
-            .onFocusChanged { if (it.isFocused) showControls = true }
+            .focusRequester(focusRequester)
             .onKeyEvent { keyEvent ->
                 if (keyEvent.type == KeyEventType.KeyDown) {
                     val keyCode = keyEvent.nativeKeyEvent.keyCode
@@ -326,6 +333,7 @@ fun VideoPlayer(
                                 useController = false // Force disabled default controller
                                 setBackgroundColor(android.graphics.Color.BLACK)
                                 this.resizeMode = resizeMode
+                                keepScreenOn = true
                                 layoutParams = ViewGroup.LayoutParams(
                                     ViewGroup.LayoutParams.MATCH_PARENT,
                                     ViewGroup.LayoutParams.MATCH_PARENT
