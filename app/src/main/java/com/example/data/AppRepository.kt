@@ -73,10 +73,10 @@ class AppRepository(
     }
 
     suspend fun insertPlaylist(name: String, rawUrl: String, type: String = "m3u"): Long = withContext(Dispatchers.IO) {
-        var url = rawUrl
+        var url = rawUrl.trim()
         // Auto-correct github blob links to raw
-        if (url.startsWith("https://github.com/") && url.contains("/blob/")) {
-            url = url.replace("https://github.com/", "https://raw.githubusercontent.com/")
+        if (url.contains("github.com/") && url.contains("/blob/")) {
+            url = url.replace("://github.com/", "://raw.githubusercontent.com/")
             url = url.replace("/blob/", "/")
         }
         
