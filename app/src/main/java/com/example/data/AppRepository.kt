@@ -31,45 +31,26 @@ class AppRepository(
     val epgSources: Flow<List<EpgSource>> = appDao.getAllEpgSourcesFlow()
 
     // In-memory EPG cache
-    private val epgCache = mutableMapOf<String, List<ProgramEpisode>>()
+    // private val epgCache = mutableMapOf<String, List<ProgramEpisode>>()
 
     suspend fun refreshEpg() = withContext(Dispatchers.IO) {
         val sources = appDao.getAllEpgSources().filter { it.isActive }
-        val newCache = mutableMapOf<String, MutableList<ProgramEpisode>>()
         
         sources.forEach { source ->
             try {
                 Log.d("Repository", "Starting EPG fetch from: ${source.url}")
+                val file = java.io.File(context.cacheDir, "epg_${source.id}.xml")
+                
+                // Fetch to file
                 fetchUrlStream(source.url).use { inputStream ->
-                    val result = IptvParser.parseXml(0, inputStream)
-                    Log.d("Repository", "Parsed ${result.programs.size} channels from ${source.url}")
-                    result.programs.forEach { (chanId, eps) ->
-                        // Add by ID
-                        val list = newCache.getOrPut(chanId) { mutableListOf() }
-                        list.addAll(eps)
-                        
-                        // Add by display name if available
-                        result.channelIdToName[chanId]?.let { displayName ->
-                            val nameList = newCache.getOrPut(displayName) { mutableListOf() }
-                            nameList.addAll(eps)
-                        }
+                    file.outputStream().use { outputStream ->
+                        inputStream.copyTo(outputStream)
                     }
                 }
+                Log.d("Repository", "Saved EPG from ${source.url} to ${file.absolutePath}")
             } catch (e: Exception) {
                 Log.e("Repository", "Failed to refresh EPG from ${source.url}", e)
             }
-        }
-
-        Log.d("Repository", "Total unique EPG keys in cache: ${newCache.size}")
-
-        // Sort episodes by time for each channel
-        newCache.forEach { (_, list) ->
-            list.sortBy { it.startTimeMs }
-        }
-
-        synchronized(epgCache) {
-            epgCache.clear()
-            newCache.forEach { (k, v) -> epgCache[k] = v }
         }
     }
 
@@ -390,23 +371,22 @@ class AppRepository(
 
     // --- EPG / ARCHIVE SCHEDULE FETCHING ---
     suspend fun fetchChannelArchiveSchedule(channel: Channel): List<ProgramEpisode> = withContext(Dispatchers.IO) {
-        // Try to find in cache first
-        synchronized(epgCache) {
-            // Priority 1: tvg-id (exact match or case-insensitive)
-            val fromTvgId = channel.tvgId?.let { id -> 
-                epgCache[id] ?: epgCache.entries.find { it.key.equals(id, ignoreCase = true) }?.value 
-            }
-            if (fromTvgId != null) return@withContext fromTvgId
+        // Find EPG files and parse for channel
+        val epgDir = context.cacheDir
+        val epgFiles = epgDir.listFiles { file -> file.name.startsWith("epg_") && file.name.endsWith(".xml") } ?: emptyArray()
 
-            // Priority 2: tvg-name
-            val fromTvgName = channel.tvgName?.let { name -> 
-                epgCache[name] ?: epgCache.entries.find { it.key.equals(name, ignoreCase = true) }?.value 
+        for (file in epgFiles) {
+            try {
+                // Parse this file for the channel
+                val episodes = file.inputStream().use { inputStream ->
+                    IptvParser.parseEpgForChannel(inputStream, channel.tvgId ?: channel.name)
+                }
+                if (episodes.isNotEmpty()) {
+                    return@withContext episodes
+                }
+            } catch (e: Exception) {
+                Log.e("Repository", "Error parsing ${file.name}", e)
             }
-            if (fromTvgName != null) return@withContext fromTvgName
-
-            // Priority 3: channel name
-            val fromName = epgCache[channel.name] ?: epgCache.entries.find { it.key.equals(channel.name, ignoreCase = true) }?.value
-            if (fromName != null) return@withContext fromName
         }
 
         // Fallback to pseudo-realistic generated data if no real EPG found
