@@ -103,14 +103,15 @@ object IptvParser {
      * 1. XMLTV format (EPG - Electronic Program Guide)
      * 2. XML Playlist (custom format)
      */
-    fun parseXml(playlistId: Long, xmlContent: String): XmlParseResult {
+    fun parseXml(playlistId: Long, inputStream: java.io.InputStream): XmlParseResult {
         val channels = mutableListOf<Channel>()
         val programs = mutableMapOf<String, MutableList<ProgramEpisode>>()
+        val epgChannelNames = mutableMapOf<String, String>() // id -> displayName
 
         try {
             val parser = Xml.newPullParser()
             parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
-            parser.setInput(StringReader(xmlContent))
+            parser.setInput(inputStream, "UTF-8")
 
             var eventType = parser.eventType
             var currentTagName: String? = null
@@ -137,7 +138,7 @@ object IptvParser {
                     XmlPullParser.START_TAG -> {
                         currentTagName = parser.name
                         when (currentTagName) {
-                            // XMLTV tag
+                            // XMLTV tags
                             "programme" -> {
                                 progStart = parser.getAttributeValue(null, "start")
                                 progStop = parser.getAttributeValue(null, "stop")
@@ -145,8 +146,17 @@ object IptvParser {
                                 progTitle = null
                                 progDesc = null
                             }
+                            "channel" -> {
+                                // In XMLTV, channel has an id attribute
+                                val id = parser.getAttributeValue(null, "id")
+                                if (id != null) {
+                                    // We'll use chName variable to store display-name later in TEXT event
+                                    progChannelId = id 
+                                    chName = null
+                                }
+                            }
                             // XML Playlist tags (supports <channel>, <item>, etc.)
-                            "channel", "item" -> {
+                            "item" -> {
                                 chName = null
                                 chUrl = null
                                 chLogo = null
@@ -161,6 +171,7 @@ object IptvParser {
                                 // XMLTV elements
                                 "title" -> progTitle = text
                                 "desc" -> progDesc = text
+                                "display-name" -> chName = text
                                 
                                 // Simple XML Playlist elements
                                 "name", "title" -> if (progChannelId == null) chName = text
@@ -173,6 +184,26 @@ object IptvParser {
                     XmlPullParser.END_TAG -> {
                         val tagAtEnd = parser.name
                         when (tagAtEnd) {
+                            "channel", "item" -> {
+                                if (progChannelId != null && chName != null && chUrl == null) {
+                                    // XMLTV channel definition: <channel id="..."><display-name>...</display-name></channel>
+                                    epgChannelNames[progChannelId!!] = chName!!
+                                    progChannelId = null
+                                    chName = null
+                                } else if (chName != null && chUrl != null && channels.size < 1000) {
+                                    // Custom XML playlist channel: <channel><name>...</name><url>...</url></channel>
+                                    channels.add(
+                                        Channel(
+                                            playlistId = playlistId,
+                                            name = chName!!,
+                                            streamUrl = chUrl!!,
+                                            logoUrl = chLogo,
+                                            category = chCat ?: "Общие"
+                                        )
+                                    )
+                                    chName = null; chUrl = null; chLogo = null; chCat = null
+                                }
+                            }
                             "programme" -> {
                                 if (progChannelId != null && progTitle != null) {
                                     try {
@@ -200,19 +231,7 @@ object IptvParser {
                                         Log.e(TAG, "Error parsing XMLTV programme timing", e)
                                     }
                                 }
-                            }
-                            "channel", "item" -> {
-                                if (chName != null && chUrl != null && channels.size < 1000) {
-                                    channels.add(
-                                        Channel(
-                                            playlistId = playlistId,
-                                            name = chName!!,
-                                            streamUrl = chUrl!!,
-                                            logoUrl = chLogo,
-                                            category = chCat ?: "Общие"
-                                        )
-                                    )
-                                }
+                                progChannelId = null
                             }
                         }
                         currentTagName = null
@@ -224,7 +243,7 @@ object IptvParser {
             Log.e(TAG, "Error parsing XML", e)
         }
 
-        return XmlParseResult(channels, programs)
+        return XmlParseResult(channels, programs, epgChannelNames)
     }
 
     private fun parseXmltvDate(dateStr: String, format: SimpleDateFormat): Long {
@@ -246,5 +265,6 @@ object IptvParser {
 
 data class XmlParseResult(
     val channels: List<Channel>,
-    val programs: Map<String, List<ProgramEpisode>>
+    val programs: Map<String, List<ProgramEpisode>>,
+    val channelIdToName: Map<String, String> = emptyMap()
 )

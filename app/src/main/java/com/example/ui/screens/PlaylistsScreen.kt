@@ -129,12 +129,12 @@ fun PlaylistsScreen(
             Tab(
                 selected = selectedTab == 0,
                 onClick = { selectedTab = 0 },
-                text = { Text("Плейлисты", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
+                text = { Text("Плейлисты", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal, color = MaterialTheme.colorScheme.onBackground) }
             )
             Tab(
                 selected = selectedTab == 1,
                 onClick = { selectedTab = 1 },
-                text = { Text("EPG Сервисы", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
+                text = { Text("EPG Сервисы", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal, color = MaterialTheme.colorScheme.onBackground) }
             )
         }
 
@@ -359,9 +359,9 @@ fun PlaylistsScreen(
                     .fillMaxHeight(0.9f)
                     .clip(RoundedCornerShape(24.dp)),
                 colors = CardDefaults.cardColors(
-                    containerColor = Color(0xFF14171E)
+                    containerColor = MaterialTheme.colorScheme.surface
                 ),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.1f))
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
             ) {
                 Column(
                     modifier = Modifier
@@ -377,14 +377,14 @@ fun PlaylistsScreen(
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = "Каналы: ${playlist.name}",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 maxLines = 1
                             )
                             Text(
                                 text = "Всего каналов: ${playlistChannels.size}",
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -393,7 +393,7 @@ fun PlaylistsScreen(
                             Icon(
                                 imageVector = Icons.Filled.Close,
                                 contentDescription = "Закрыть",
-                                tint = Color.White
+                                tint = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
@@ -471,7 +471,7 @@ fun PlaylistsScreen(
                                 )
                                 Text(
                                     text = "ОК",
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     modifier = Modifier
@@ -496,7 +496,7 @@ fun PlaylistsScreen(
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
                                     "Сканирование и пинг каналов...",
-                                    color = Color.White.copy(alpha = 0.7f),
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                     style = MaterialTheme.typography.bodyMedium
                                 )
                             }
@@ -519,7 +519,7 @@ fun PlaylistsScreen(
                                     ) {
                                         Text(
                                             "Каналы отсутствуют",
-                                            color = Color.White.copy(alpha = 0.5f),
+                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                                             style = MaterialTheme.typography.bodyMedium
                                         )
                                     }
@@ -530,7 +530,7 @@ fun PlaylistsScreen(
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = Color.White.copy(alpha = 0.05f)
+                                        containerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
                                     ),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
@@ -545,7 +545,7 @@ fun PlaylistsScreen(
                                             modifier = Modifier
                                                 .size(38.dp)
                                                 .clip(RoundedCornerShape(6.dp))
-                                                .background(Color.White.copy(alpha = 0.1f)),
+                                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             if (!channel.logoUrl.isNullOrEmpty()) {
@@ -560,7 +560,7 @@ fun PlaylistsScreen(
                                             } else {
                                                 Text(
                                                     text = channel.name.take(1).uppercase(),
-                                                    color = Color.White.copy(alpha = 0.8f),
+                                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -576,7 +576,7 @@ fun PlaylistsScreen(
                                             ) {
                                                 Text(
                                                     text = channel.name,
-                                                    color = Color.White,
+                                                    color = MaterialTheme.colorScheme.onSurface,
                                                     style = MaterialTheme.typography.bodyMedium,
                                                     fontWeight = FontWeight.Bold
                                                 )
@@ -584,12 +584,12 @@ fun PlaylistsScreen(
                                                     Box(
                                                         modifier = Modifier
                                                             .clip(RoundedCornerShape(4.dp))
-                                                            .background(Color.White.copy(alpha = 0.15f))
+                                                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.15f))
                                                             .padding(horizontal = 4.dp, vertical = 2.dp)
                                                     ) {
                                                         Text(
                                                             channel.category,
-                                                            color = Color.White.copy(alpha = 0.7f),
+                                                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                                             style = MaterialTheme.typography.labelSmall
                                                         )
                                                     }
@@ -598,7 +598,7 @@ fun PlaylistsScreen(
                                             Spacer(modifier = Modifier.height(2.dp))
                                             Text(
                                                 text = channel.streamUrl,
-                                                color = Color.White.copy(alpha = 0.4f),
+                                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 maxLines = 1
                                             )
@@ -875,13 +875,13 @@ private fun PlaylistsContent(
             Column {
                 Text(
                     text = "Плейлисты IPTV",
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Добавление M3U и XML файлов",
-                    color = Color.White.copy(alpha = 0.6f),
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -962,8 +962,8 @@ private fun PlaylistEmptyState() {
     ) {
         Icon(Icons.Filled.PlaylistRemove, null, tint = Color.Gray, modifier = Modifier.size(64.dp))
         Spacer(modifier = Modifier.height(12.dp))
-        Text("Плейлисты не загружены", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        Text("Добавьте список (M3U/XML) для начала просмотра", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
+        Text("Плейлисты не загружены", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Добавьте список (M3U/XML) для начала просмотра", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -999,26 +999,26 @@ private fun PlaylistCard(
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(playlist.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text(playlist.url, color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text(playlist.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(playlist.url, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 var fm by remember { mutableStateOf(false) }
-                IconButton(onClick = onManage, modifier = Modifier.onFocusChanged { fm = it.isFocused }.background(if (fm) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
+                IconButton(onClick = onManage, modifier = Modifier.onFocusChanged { fm = it.isFocused }.background(if (fm) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
                     Icon(Icons.Filled.List, null, tint = if (fm) CinemaAmber else SkyBlue)
                 }
                 var fe by remember { mutableStateOf(false) }
-                IconButton(onClick = onEdit, modifier = Modifier.onFocusChanged { fe = it.isFocused }.background(if (fe) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
-                    Icon(Icons.Filled.Edit, null, tint = if (fe) Color.White else CinemaAmber)
+                IconButton(onClick = onEdit, modifier = Modifier.onFocusChanged { fe = it.isFocused }.background(if (fe) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
+                    Icon(Icons.Filled.Edit, null, tint = if (fe) MaterialTheme.colorScheme.onSurface else CinemaAmber)
                 }
                 var fr by remember { mutableStateOf(false) }
-                IconButton(onClick = onRefresh, modifier = Modifier.onFocusChanged { fr = it.isFocused }.background(if (fr) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
-                    Icon(Icons.Filled.Refresh, null, tint = if (fr) CinemaAmber else Color.White)
+                IconButton(onClick = onRefresh, modifier = Modifier.onFocusChanged { fr = it.isFocused }.background(if (fr) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
+                    Icon(Icons.Filled.Refresh, null, tint = if (fr) CinemaAmber else MaterialTheme.colorScheme.onSurface)
                 }
                 if (!playlist.isBuiltIn) {
                     var fd by remember { mutableStateOf(false) }
                     IconButton(onClick = onDelete, modifier = Modifier.onFocusChanged { fd = it.isFocused }.background(if (fd) LiveRed.copy(alpha = 0.2f) else Color.Transparent, CircleShape).focusable()) {
-                        Icon(Icons.Filled.Delete, null, tint = if (fd) Color.White else LiveRed)
+                        Icon(Icons.Filled.Delete, null, tint = if (fd) MaterialTheme.colorScheme.onSurface else LiveRed)
                     }
                 }
             }
@@ -1042,13 +1042,13 @@ private fun EpgSourcesContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
-                Text(text = "EPG Сервисы", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(text = "Источники для программы передач (XMLTV)", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
+                Text(text = "EPG Сервисы", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(text = "Источники для программы передач (XMLTV)", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 var isRfFocused by remember { mutableStateOf(false) }
-                IconButton(onClick = onRefresh, modifier = Modifier.onFocusChanged { isRfFocused = it.isFocused }.border(if (isRfFocused) 2.dp else 0.dp, Color.White, CircleShape).focusable()) {
+                IconButton(onClick = onRefresh, modifier = Modifier.onFocusChanged { isRfFocused = it.isFocused }.border(if (isRfFocused) 2.dp else 0.dp, MaterialTheme.colorScheme.onBackground, CircleShape).focusable()) {
                     Icon(Icons.Filled.Refresh, null, tint = CinemaAmber)
                 }
 
@@ -1057,7 +1057,7 @@ private fun EpgSourcesContent(
                     onClick = onAdd,
                     containerColor = CinemaAmber,
                     contentColor = Color.Black,
-                    modifier = Modifier.onFocusChanged { isFabFocused = it.isFocused }.border(if (isFabFocused) 2.dp else 0.dp, Color.White, CircleShape).focusable(),
+                    modifier = Modifier.onFocusChanged { isFabFocused = it.isFocused }.border(if (isFabFocused) 2.dp else 0.dp, MaterialTheme.colorScheme.onBackground, CircleShape).focusable(),
                     shape = CircleShape
                 ) {
                     Icon(Icons.Filled.Add, null)
@@ -1076,8 +1076,8 @@ private fun EpgSourcesContent(
                         Column(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(Icons.Filled.RssFeed, null, tint = Color.Gray, modifier = Modifier.size(64.dp))
                             Spacer(modifier = Modifier.height(12.dp))
-                            Text("EPG не настроен", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("Добавьте URL XMLTV источника для получения программы", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
+                            Text("EPG не настроен", color = MaterialTheme.colorScheme.onBackground, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Добавьте URL XMLTV источника для получения программы", color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -1094,22 +1094,22 @@ private fun EpgSourcesContent(
 private fun EpgSourceCard(source: EpgSource, onDelete: () -> Unit, onToggle: (Boolean) -> Unit) {
     var isFocused by remember { mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth().onFocusChanged { isFocused = it.isFocused }.border(if (isFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(16.dp)).focusable(),
-        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else SlateCard),
+        modifier = Modifier.fillMaxWidth().onFocusChanged { isFocused = it.isFocused }.border(if (isFocused) 2.dp else 0.dp, MaterialTheme.colorScheme.onBackground, RoundedCornerShape(16.dp)).focusable(),
+        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(16.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.Language, null, tint = SkyBlue, modifier = Modifier.size(36.dp))
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(source.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
-                Text(source.url, color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+                Text(source.name, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(source.url, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
             Switch(checked = source.isActive, onCheckedChange = onToggle, colors = SwitchDefaults.colors(checkedThumbColor = CinemaAmber))
             Spacer(modifier = Modifier.width(8.dp))
             var fd by remember { mutableStateOf(false) }
             IconButton(onClick = onDelete, modifier = Modifier.onFocusChanged { fd = it.isFocused }.background(if (fd) LiveRed.copy(alpha = 0.2f) else Color.Transparent, CircleShape).focusable()) {
-                Icon(Icons.Filled.Delete, null, tint = if (fd) Color.White else LiveRed)
+                Icon(Icons.Filled.Delete, null, tint = if (fd) MaterialTheme.colorScheme.onSurface else LiveRed)
             }
         }
     }

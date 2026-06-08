@@ -50,13 +50,13 @@ fun ParentalScreen(
         ) {
             Text(
                 text = "Родительский контроль",
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onBackground,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(
                 text = "Защита каналов и параметров вещаний семейным PIN-кодом",
-                color = Color.White.copy(alpha = 0.6f),
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
                 style = MaterialTheme.typography.bodySmall
             )
         }
@@ -67,9 +67,9 @@ fun ParentalScreen(
                 .fillMaxWidth()
                 .padding(bottom = 16.dp),
             colors = CardDefaults.cardColors(
-                containerColor = SlateCard
+                containerColor = MaterialTheme.colorScheme.surface
             ),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(
@@ -95,13 +95,13 @@ fun ParentalScreen(
                         Column {
                             Text(
                                 "Ограничение вещания",
-                                color = Color.White,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "Запрашивать PIN для заблокированных каналов",
-                                color = Color.White.copy(alpha = 0.6f),
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -232,7 +232,7 @@ fun ParentalScreen(
                     )
                     Text(
                         "Вы можете нажать на иконку замочка рядом с любым каналом или удерживать его в списке главного экрана, чтобы быстро заблокировать или разблокировать его от детей. Заблокированный канал потребует ввода кода перед просмотром.",
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.8f),
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.padding(top = 4.dp)
                     )

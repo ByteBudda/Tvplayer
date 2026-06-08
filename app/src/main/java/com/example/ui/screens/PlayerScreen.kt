@@ -291,7 +291,7 @@ private fun ArchiveBanner(viewModel: AppViewModel) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(imageVector = Icons.Filled.History, contentDescription = null, tint = SkyBlue)
-                Text("Вы смотрите запись из архива", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                Text("Вы смотрите запись из архива", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
             }
             Button(
                 onClick = { viewModel.switchBackToLive() },
@@ -310,8 +310,8 @@ private fun EPGSpoiler(selectedChannel: Channel?, archiveSchedule: List<ProgramE
     var isFocused by remember { mutableStateOf(false) }
     Card(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { isFocused = it.isFocused }.focusable(),
-        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else SlateCard),
-        border = BorderStroke(if (isFocused) 2.dp else 1.dp, if (isFocused) Color.White else Color.White.copy(alpha = 0.05f))
+        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else MaterialTheme.colorScheme.surface),
+        border = BorderStroke(if (isFocused) 2.dp else 1.dp, if (isFocused) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
     ) {
         Column {
             Row(
@@ -319,8 +319,8 @@ private fun EPGSpoiler(selectedChannel: Channel?, archiveSchedule: List<ProgramE
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(selectedChannel?.let { "EPG: ${it.name}" } ?: "Программа передач", color = Color.White, fontWeight = FontWeight.SemiBold)
-                Icon(imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = Color.White)
+                Text(selectedChannel?.let { "EPG: ${it.name}" } ?: "Программа передач", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                Icon(imageVector = if (isExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
             }
             AnimatedVisibility(visible = isExpanded) {
                 LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 200.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -337,7 +337,7 @@ private fun EPGSpoiler(selectedChannel: Channel?, archiveSchedule: List<ProgramE
                         ) {
                             Text(
                                 text = "${program.startTimeString} - ${program.title}", 
-                                color = if (program.isArchive) SkyBlue else Color.White.copy(alpha = 0.6f), 
+                                color = if (program.isArchive) SkyBlue else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f), 
                                 style = MaterialTheme.typography.bodySmall,
                                 modifier = Modifier.padding(6.dp)
                             )
@@ -359,13 +359,13 @@ private fun CategorySelector(categories: List<String>, selected: String, viewMod
                 modifier = Modifier
                     .clip(RoundedCornerShape(16.dp))
                     .onFocusChanged { isFoc = it.isFocused }
-                    .background(if (isSel) MaterialTheme.colorScheme.primary else SlateCard)
-                    .border(BorderStroke(if (isFoc) 2.dp else 1.dp, if (isFoc) Color.White else Color.Transparent), RoundedCornerShape(16.dp))
+                    .background(if (isSel) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface)
+                    .border(BorderStroke(if (isFoc) 2.dp else 1.dp, if (isFoc) MaterialTheme.colorScheme.onBackground else Color.Transparent), RoundedCornerShape(16.dp))
                     .clickable { viewModel.selectCategory(category) }
                     .focusable()
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             ) {
-                Text(category, color = if (isSel) Color.Black else Color.White, fontWeight = FontWeight.Bold)
+                Text(category, color = if (isSel) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -383,15 +383,15 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
                     onClick = { if (channel.isLocked && parental && !unlocked) onPin(channel) else viewModel.selectChannel(channel) },
                     onLongClick = { viewModel.toggleChannelLock(channel) }
                 ).focusable(),
-                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) SlateFocus else SlateCard),
-                border = BorderStroke(2.dp, if (isFoc) Color.White else if (isSel) CinemaAmber else Color.Transparent)
+                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) SlateFocus else MaterialTheme.colorScheme.surface),
+                border = BorderStroke(2.dp, if (isFoc) MaterialTheme.colorScheme.onSurface else if (isSel) CinemaAmber else Color.Transparent)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color.White.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
                         AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(4.dp))
                     }
                     Spacer(Modifier.width(12.dp))
-                    Text(channel.name, color = Color.White, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(channel.name, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (channel.isLocked) Icon(Icons.Default.Lock, contentDescription = null, tint = LiveRed, modifier = Modifier.size(16.dp))
                     IconButton(onClick = { viewModel.toggleFavorite(channel) }) {
                         Icon(if (channel.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = null, tint = CinemaAmber)

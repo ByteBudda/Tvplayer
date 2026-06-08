@@ -32,11 +32,19 @@ class AppRepository(
         
         sources.forEach { source ->
             try {
-                val content = fetchUrlContent(source.url)
-                val result = IptvParser.parseXml(0, content) // id doesn't matter for EPG only
-                result.programs.forEach { (chanId, eps) ->
-                    val list = newCache.getOrPut(chanId) { mutableListOf() }
-                    list.addAll(eps)
+                fetchUrlStream(source.url).use { inputStream ->
+                    val result = IptvParser.parseXml(0, inputStream)
+                    result.programs.forEach { (chanId, eps) ->
+                        // Add by ID
+                        val list = newCache.getOrPut(chanId) { mutableListOf() }
+                        list.addAll(eps)
+                        
+                        // Add by display name if available
+                        result.channelIdToName[chanId]?.let { displayName ->
+                            val nameList = newCache.getOrPut(displayName) { mutableListOf() }
+                            nameList.addAll(eps)
+                        }
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("Repository", "Failed to refresh EPG from ${source.url}", e)
@@ -103,7 +111,8 @@ class AppRepository(
                     }
                 }
             } else {
-                val result = IptvParser.parseXml(id, content)
+                val inputStream = content.byteInputStream()
+                val result = IptvParser.parseXml(id, inputStream)
                 if (result.channels.isNotEmpty()) {
                     appDao.deleteChannelsByPlaylist(id)
                     result.channels.chunked(100).forEach { chunk ->
@@ -153,8 +162,8 @@ class AppRepository(
         }
 
         try {
-            val content = fetchUrlContent(playlist.url)
             if (playlist.type == "m3u") {
+                val content = fetchUrlContent(playlist.url)
                 val parsedChannels = IptvParser.parseM3u(playlistId, content)
                 if (parsedChannels.isNotEmpty()) {
                     appDao.deleteChannelsByPlaylist(playlistId)
@@ -166,14 +175,16 @@ class AppRepository(
                 }
             } else {
                 // XML format playlist
-                val result = IptvParser.parseXml(playlistId, content)
-                if (result.channels.isNotEmpty()) {
-                    appDao.deleteChannelsByPlaylist(playlistId)
-                    result.channels.chunked(100).forEach { chunk ->
-                        appDao.insertChannels(chunk)
+                fetchUrlStream(playlist.url).use { inputStream ->
+                    val result = IptvParser.parseXml(playlistId, inputStream)
+                    if (result.channels.isNotEmpty()) {
+                        appDao.deleteChannelsByPlaylist(playlistId)
+                        result.channels.chunked(100).forEach { chunk ->
+                            appDao.insertChannels(chunk)
+                        }
+                    } else if (playlist.isBuiltIn) {
+                        insertMockChannelsForPlaylist(playlistId)
                     }
-                } else if (playlist.isBuiltIn) {
-                    insertMockChannelsForPlaylist(playlistId)
                 }
             }
         } catch (e: Exception) {
@@ -360,13 +371,20 @@ class AppRepository(
     suspend fun fetchChannelArchiveSchedule(channel: Channel): List<ProgramEpisode> = withContext(Dispatchers.IO) {
         // Try to find in cache first
         synchronized(epgCache) {
-            val fromTvgId = channel.tvgId?.let { epgCache[it] }
+            // Priority 1: tvg-id (exact match or case-insensitive)
+            val fromTvgId = channel.tvgId?.let { id -> 
+                epgCache[id] ?: epgCache.entries.find { it.key.equals(id, ignoreCase = true) }?.value 
+            }
             if (fromTvgId != null) return@withContext fromTvgId
 
-            val fromTvgName = channel.tvgName?.let { epgCache[it] }
+            // Priority 2: tvg-name
+            val fromTvgName = channel.tvgName?.let { name -> 
+                epgCache[name] ?: epgCache.entries.find { it.key.equals(name, ignoreCase = true) }?.value 
+            }
             if (fromTvgName != null) return@withContext fromTvgName
 
-            val fromName = epgCache[channel.name]
+            // Priority 3: channel name
+            val fromName = epgCache[channel.name] ?: epgCache.entries.find { it.key.equals(channel.name, ignoreCase = true) }?.value
             if (fromName != null) return@withContext fromName
         }
 
@@ -375,11 +393,15 @@ class AppRepository(
         val currentTime = System.currentTimeMillis()
         val oneHourMs = 3600000L
         val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        
+        // Use hash of channel name to generate consistent but different titles for different channels
+        val channelHash = channel.name.hashCode().let { if (it < 0) -it else it }
+        
         val titlesMap = mapOf(
-            "Спорт" to listOf("Обзор матчей ЛЧ", "Новости спорта", "Легендарные победы", "Формула-1 live", "Спортивная аналитика"),
-            "Фильмы" to listOf("Художественный фильм", "Мировое кино", "Дом кино", "Новости Голливуда", "Истории актеров"),
-            "Познавательные" to listOf("Дикая природа Африки", "Секреты Вселенной", "Разрушители легенд", "Как это устроено", "История Земли"),
-            "Общие" to listOf("Утренние Новости", "Информационный канал", "Погода сегодня", "Ток-шоу 'Пусть Говорят'", "Вечерний обзор")
+            "Спорт" to listOf("Спортивный обзор", "Новости спорта", "Легенды", "Live Трансляция", "Аналитика"),
+            "Фильмы" to listOf("Кино на вечер", "Мировой прокат", "Шедевры кино", "Сериал дня", "Актерская судьба"),
+            "Познавательные" to listOf("Дикая природа", "Загадки", "Научный подход", "Технологии", "История"),
+            "Общие" to listOf("Утренний эфир", "События дня", "Прогноз погоды", "Интервью", "Вечернее шоу")
         )
         val category = when {
             channel.name.lowercase().contains("матч") || channel.name.lowercase().contains("спорт") -> "Спорт"
@@ -391,14 +413,15 @@ class AppRepository(
         for (i in -5..2) {
             val startMs = currentTime + (i * oneHourMs)
             val stopMs = startMs + oneHourMs
+            val titlesIndex = (channelHash + i.let { if (it < 0) -it else it }) % titles.size
             val title = if (i < 0) {
-                titles[Math.abs(i) % titles.size] + " (Архив)"
+                titles[titlesIndex] + " (Архив)"
             } else if (i == 0) {
-                "Прямой эфир: " + titles[0]
+                "Эфир: " + titles[titlesIndex]
             } else {
-                "Анонс: " + titles[(i + 2) % titles.size]
+                "Далее: " + titles[titlesIndex]
             }
-            val desc = "Увлекательная телепередача на канале ${channel.name}. Запись доступна в высоком качестве."
+            val desc = "Телепередача на канале ${channel.name}. Смотрите в любое время."
             list.add(
                 ProgramEpisode(
                     title = title,
@@ -414,14 +437,34 @@ class AppRepository(
         list
     }
 
-    private suspend fun fetchUrlContent(urlString: String): String = withContext(Dispatchers.IO) {
+    private suspend fun fetchUrlStream(urlString: String): java.io.InputStream = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url(urlString)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64)")
+            .header("Accept-Encoding", "gzip")
             .build()
-        client.newCall(request).execute().use { response ->
-            if (!response.isSuccessful) throw Exception("Failed to load: ${response.code}")
-            response.body?.string() ?: ""
+        
+        val response = client.newCall(request).execute()
+        if (!response.isSuccessful) {
+            response.close()
+            throw Exception("Failed to load: ${response.code}")
+        }
+        
+        val body = response.body ?: throw Exception("Empty response body")
+        var inputStream = body.byteStream()
+        
+        // Handle GZIP based on header or extension
+        val contentEncoding = response.header("Content-Encoding")
+        if (contentEncoding == "gzip" || urlString.endsWith(".gz")) {
+            inputStream = java.util.zip.GZIPInputStream(inputStream)
+        }
+        
+        inputStream
+    }
+
+    private suspend fun fetchUrlContent(urlString: String): String = withContext(Dispatchers.IO) {
+        fetchUrlStream(urlString).use { inputStream ->
+            inputStream.bufferedReader().use { it.readText() }
         }
     }
 }
