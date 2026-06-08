@@ -19,7 +19,6 @@ import com.example.ui.components.AdaptiveNavigationRail
 import com.example.ui.screens.ParentalScreen
 import com.example.ui.screens.PlayerScreen
 import com.example.ui.screens.PlaylistsScreen
-import com.example.ui.screens.RecordingsScreen
 import com.example.ui.theme.MyApplicationTheme
 
 import androidx.compose.ui.platform.LocalContext
@@ -97,7 +96,6 @@ class MainActivity : ComponentActivity() {
                             when (currentScreen) {
                                 AppViewModel.Screen.PLAYER -> PlayerScreen(viewModel = viewModel)
                                 AppViewModel.Screen.PLAYLISTS -> PlaylistsScreen(viewModel = viewModel)
-                                AppViewModel.Screen.RECORDINGS -> RecordingsScreen(viewModel = viewModel)
                                 AppViewModel.Screen.PARENTAL -> ParentalScreen(viewModel = viewModel)
                             }
                         }

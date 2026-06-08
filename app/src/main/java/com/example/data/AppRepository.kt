@@ -21,7 +21,6 @@ class AppRepository(
     val playlists: Flow<List<Playlist>> = appDao.getAllPlaylistsFlow()
     val allChannels: Flow<List<Channel>> = appDao.getAllChannelsFlow()
     val categories: Flow<List<String>> = appDao.getAllCategoriesFlow()
-    val recordings: Flow<List<Recording>> = appDao.getAllRecordingsFlow()
 
     fun getChannelsByPlaylist(playlistId: Long): Flow<List<Channel>> {
         return appDao.getChannelsByPlaylistFlow(playlistId)
@@ -243,10 +242,6 @@ class AppRepository(
 
     suspend fun toggleLocked(channelId: Long, isLocked: Boolean) = withContext(Dispatchers.IO) {
         appDao.updateLocked(channelId, isLocked)
-    }
-
-    suspend fun deleteRecording(id: Long) = withContext(Dispatchers.IO) {
-        appDao.deleteRecordingById(id)
     }
 
     // --- PARENTAL CONTROL SETTINGS ---

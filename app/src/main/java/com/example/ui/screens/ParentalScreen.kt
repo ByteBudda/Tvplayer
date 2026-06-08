@@ -2,6 +2,8 @@ package com.example.ui.screens
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -11,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +107,7 @@ fun ParentalScreen(
                         }
                     }
 
+                    var isSwitchFocused by remember { mutableStateOf(false) }
                     Switch(
                         checked = isEnabledChecked,
                         onCheckedChange = { isEnabledChecked = it },
@@ -111,7 +115,15 @@ fun ParentalScreen(
                             checkedThumbColor = CinemaAmber,
                             checkedTrackColor = CinemaAmber.copy(alpha = 0.4f)
                         ),
-                        modifier = Modifier.testTag("parental_switch")
+                        modifier = Modifier
+                            .onFocusChanged { isSwitchFocused = it.isFocused }
+                            .border(
+                                if (isSwitchFocused) 2.dp else 0.dp,
+                                if (isSwitchFocused) Color.White else Color.Transparent,
+                                RoundedCornerShape(4.dp)
+                            )
+                            .focusable()
+                            .testTag("parental_switch")
                     )
                 }
 
@@ -150,6 +162,7 @@ fun ParentalScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
+                var isSaveFocused by remember { mutableStateOf(false) }
                 Button(
                     onClick = {
                         if (pinValue.length < 4) {
@@ -168,6 +181,13 @@ fun ParentalScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
+                        .onFocusChanged { isSaveFocused = it.isFocused }
+                        .border(
+                            if (isSaveFocused) 2.dp else 0.dp,
+                            if (isSaveFocused) Color.White else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .focusable()
                         .testTag("save_parental_settings_button"),
                     shape = RoundedCornerShape(8.dp)
                 ) {

@@ -24,18 +24,6 @@ data class Channel(
     val isFavorite: Boolean = false
 )
 
-@Entity(tableName = "recording")
-data class Recording(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val channelName: String,
-    val streamUrl: String,
-    val startTime: Long,
-    val durationMs: Long = 0,
-    val filePath: String,
-    val fileSize: Long = 0,
-    val status: String // "Recording", "Completed", "Failed"
-)
-
 @Entity(tableName = "app_setting")
 data class AppSetting(
     @PrimaryKey val key: String,

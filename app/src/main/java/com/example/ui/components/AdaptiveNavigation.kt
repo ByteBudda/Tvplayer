@@ -21,7 +21,6 @@ data class NavItem(
 val navItemsList = listOf(
     NavItem("Эфир ТВ", Icons.Filled.Tv, AppViewModel.Screen.PLAYER, "nav_item_player"),
     NavItem("Плейлисты", Icons.Filled.PlaylistPlay, AppViewModel.Screen.PLAYLISTS, "nav_item_playlists"),
-    NavItem("Записи", Icons.Filled.DownloadDone, AppViewModel.Screen.RECORDINGS, "nav_item_recordings"),
     NavItem("Замочек", Icons.Filled.FamilyRestroom, AppViewModel.Screen.PARENTAL, "nav_item_parental")
 )
 

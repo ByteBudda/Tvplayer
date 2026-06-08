@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
-import com.example.util.StreamRecorder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -17,7 +16,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val repository = AppRepository(dao, application)
 
     // Screen State
-    enum class Screen { PLAYER, PLAYLISTS, RECORDINGS, PARENTAL }
+    enum class Screen { PLAYER, PLAYLISTS, PARENTAL }
     private val _currentScreen = MutableStateFlow(Screen.PLAYER)
     val currentScreen: StateFlow<Screen> = _currentScreen.asStateFlow()
 
@@ -29,9 +28,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val categories: StateFlow<List<String>> = repository.categories
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val recordings: StateFlow<List<Recording>> = repository.recordings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Active Selection State
@@ -48,9 +44,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Loading & Refresh UI indicator status
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-
-    // Active Recording states tracked from StreamRecorder
-    val activeRecordingUrls: StateFlow<Set<String>> = StreamRecorder.recordingUrls
 
     // Parental Controls states
     private val _parentalEnabled = MutableStateFlow(false)
@@ -85,7 +78,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     sealed interface PlayMediaMode {
         data object DirectLive : PlayMediaMode
         data class ArchivePlay(val episode: ProgramEpisode) : PlayMediaMode
-        data class RecordingPlay(val recording: Recording) : PlayMediaMode
     }
     private val _playMode = MutableStateFlow<PlayMediaMode>(PlayMediaMode.DirectLive)
     val playMode: StateFlow<PlayMediaMode> = _playMode.asStateFlow()
@@ -160,11 +152,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectArchiveEpisode(episode: ProgramEpisode) {
         _playMode.value = PlayMediaMode.ArchivePlay(episode)
-    }
-
-    fun selectRecordingForPlay(recording: Recording) {
-        _playMode.value = PlayMediaMode.RecordingPlay(recording)
-        _currentScreen.value = Screen.PLAYER
     }
 
     fun switchBackToLive() {
@@ -282,36 +269,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } finally {
                 _isRefreshing.value = false
             }
-        }
-    }
-
-    // --- RECORDINGS ENGINE ---
-    fun toggleRecordingActiveChannel() {
-        val channel = _selectedChannel.value ?: return
-        viewModelScope.launch {
-            if (StreamRecorder.isRecording(channel.streamUrl)) {
-                // To safely stop from our stream recorder, search the active database recording
-                val activeRecs = recordings.value.find { 
-                    it.channelName == channel.name && it.status == "Recording" 
-                }
-                if (activeRecs != null) {
-                    StreamRecorder.stopRecording(activeRecs.id, dao)
-                }
-                StreamRecorder.cancelRecordingByStreamUrl(channel.streamUrl, dao)
-            } else {
-                StreamRecorder.startRecording(
-                    context = getApplication(),
-                    channelName = channel.name,
-                    streamUrl = channel.streamUrl,
-                    dao = dao
-                )
-            }
-        }
-    }
-
-    fun deleteRecording(id: Long) {
-        viewModelScope.launch {
-            repository.deleteRecording(id)
         }
     }
 

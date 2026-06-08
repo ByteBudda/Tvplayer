@@ -62,19 +62,6 @@ interface AppDao {
     @Query("UPDATE channel SET isLocked = :isLocked WHERE id = :channelId")
     suspend fun updateLocked(channelId: Long, isLocked: Boolean)
 
-    // --- RECORDINGS ---
-    @Query("SELECT * FROM recording ORDER BY startTime DESC")
-    fun getAllRecordingsFlow(): Flow<List<Recording>>
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertRecording(recording: Recording): Long
-
-    @Update
-    suspend fun updateRecording(recording: Recording)
-
-    @Query("DELETE FROM recording WHERE id = :id")
-    suspend fun deleteRecordingById(id: Long)
-
     // --- APP SETTINGS ---
     @Query("SELECT * FROM app_setting WHERE `key` = :key LIMIT 1")
     suspend fun getSetting(key: String): AppSetting?

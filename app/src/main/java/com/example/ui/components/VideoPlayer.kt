@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import java.io.File
 import androidx.compose.foundation.clickable
@@ -20,6 +21,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -46,15 +48,13 @@ fun VideoPlayer(
     title: String,
     logoUrl: String? = null,
     mode: AppViewModel.PlayMediaMode,
-    isRecording: Boolean,
     modifier: Modifier = Modifier,
     isFullscreen: Boolean = false,
     resizeMode: Int = 0,
     onToggleFullscreen: () -> Unit = {},
     onToggleResizeMode: () -> Unit = {},
     onPreviousChannel: (() -> Unit)? = null,
-    onNextChannel: (() -> Unit)? = null,
-    onToggleRecording: () -> Unit = {}
+    onNextChannel: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     var isPlaying by remember { mutableStateOf(true) }
@@ -172,10 +172,6 @@ fun VideoPlayer(
 
         try {
             val mediaUri = when (mode) {
-                is AppViewModel.PlayMediaMode.RecordingPlay -> {
-                    val file = File(mode.recording.filePath)
-                    if (file.exists()) Uri.fromFile(file) else Uri.parse(streamUrl)
-                }
                 else -> Uri.parse(streamUrl)
             }
 
@@ -417,7 +413,6 @@ fun VideoPlayer(
                             ) {
                                 val (badgeText, badgeColor) = when (mode) {
                                     is AppViewModel.PlayMediaMode.ArchivePlay -> "АРХИВ" to SkyBlue
-                                    is AppViewModel.PlayMediaMode.RecordingPlay -> "ЗАПИСЬ" to CinemaAmber
                                     is AppViewModel.PlayMediaMode.DirectLive -> "ЭФИР" to LiveRed
                                 }
 
@@ -446,81 +441,70 @@ fun VideoPlayer(
                                         )
                                     }
                                 }
-
-                                if (mode is AppViewModel.PlayMediaMode.DirectLive) {
-                                    IconButton(
-                                        onClick = onToggleRecording,
-                                        modifier = Modifier
-                                            .testTag("record_channel_button")
-                                            .background(Color.Black.copy(alpha = 0.7f), CircleShape)
-                                            .size(36.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.FiberManualRecord,
-                                            contentDescription = "Записать передачу",
-                                            tint = if (isRecording) LiveRed.copy(alpha = pulseAlpha) else Color.White,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
                             }
                         }
 
                         // 2. CENTER PANEL: Previous, Play/Pause, Next channel controls
-                        Row(
-                            modifier = Modifier.align(Alignment.Center),
-                            horizontalArrangement = Arrangement.spacedBy(28.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // Previous Channel Button
-                            IconButton(
-                                onClick = { onPreviousChannel?.invoke() },
-                                modifier = Modifier
-                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                                    .size(50.dp)
+                            Row(
+                                modifier = Modifier.align(Alignment.Center),
+                                horizontalArrangement = Arrangement.spacedBy(28.dp),
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Filled.SkipPrevious,
-                                    contentDescription = "Предыдущий канал",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(30.dp)
-                                )
-                            }
+                                // Previous Channel Button
+                                var isPrevFocused by remember { mutableStateOf(false) }
+                                IconButton(
+                                    onClick = { onPreviousChannel?.invoke() },
+                                    modifier = Modifier
+                                        .onFocusChanged { isPrevFocused = it.isFocused }
+                                        .background(if (isPrevFocused) CinemaAmber else Color.Black.copy(alpha = 0.6f), CircleShape)
+                                        .size(50.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.SkipPrevious,
+                                        contentDescription = "Предыдущий канал",
+                                        tint = if (isPrevFocused) Color.Black else Color.White,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
 
-                            // Play/Pause button
-                            IconButton(
-                                onClick = {
-                                    exoPlayer.let { player ->
-                                        if (player.isPlaying) player.pause() else player.play()
-                                    }
-                                },
-                                modifier = Modifier
-                                    .background(CinemaAmber, CircleShape)
-                                    .size(58.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                    contentDescription = if (isPlaying) "Пауза" else "Воспроизведение",
-                                    tint = Color.Black,
-                                    modifier = Modifier.size(34.dp)
-                                )
-                            }
+                                // Play/Pause button
+                                var isPlayFocused by remember { mutableStateOf(false) }
+                                IconButton(
+                                    onClick = {
+                                        exoPlayer.let { player ->
+                                            if (player.isPlaying) player.pause() else player.play()
+                                        }
+                                    },
+                                    modifier = Modifier
+                                        .onFocusChanged { isPlayFocused = it.isFocused }
+                                        .background(if (isPlayFocused) Color.White else CinemaAmber, CircleShape)
+                                        .size(58.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                        contentDescription = if (isPlaying) "Пауза" else "Воспроизведение",
+                                        tint = Color.Black,
+                                        modifier = Modifier.size(34.dp)
+                                    )
+                                }
 
-                            // Next Channel Button
-                            IconButton(
-                                onClick = { onNextChannel?.invoke() },
-                                modifier = Modifier
-                                    .background(Color.Black.copy(alpha = 0.6f), CircleShape)
-                                    .size(50.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.SkipNext,
-                                    contentDescription = "Следующий канал",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(30.dp)
-                                )
+                                // Next Channel Button
+                                var isNextFocused by remember { mutableStateOf(false) }
+                                IconButton(
+                                    onClick = { onNextChannel?.invoke() },
+                                    modifier = Modifier
+                                        .onFocusChanged { isNextFocused = it.isFocused }
+                                        .background(if (isNextFocused) CinemaAmber else Color.Black.copy(alpha = 0.6f), CircleShape)
+                                        .size(50.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.SkipNext,
+                                        contentDescription = "Следующий канал",
+                                        tint = if (isNextFocused) Color.Black else Color.White,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
                             }
-                        }
 
                         // 3. BOTTOM PANEL: SEEKBAR & FULLSCREEN CONTROLLER
                         Column(
@@ -529,7 +513,7 @@ fun VideoPlayer(
                                 .align(Alignment.BottomStart),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            val isMediaSeekable = mode is AppViewModel.PlayMediaMode.ArchivePlay || mode is AppViewModel.PlayMediaMode.RecordingPlay
+                            val isMediaSeekable = mode is AppViewModel.PlayMediaMode.ArchivePlay
                             if (isMediaSeekable && totalDuration > 0) {
                                 Row(
                                     modifier = Modifier
@@ -573,17 +557,19 @@ fun VideoPlayer(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.End
                             ) {
+                                var isFullFocused by remember { mutableStateOf(false) }
                                 IconButton(
                                     onClick = onToggleFullscreen,
                                     modifier = Modifier
-                                        .testTag("toggle_fullscreen_button")
-                                        .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                        .onFocusChanged { isFullFocused = it.isFocused }
+                                        .background(if (isFullFocused) CinemaAmber else Color.Black.copy(alpha = 0.7f), CircleShape)
                                         .size(38.dp)
+                                        .testTag("toggle_fullscreen_button")
                                 ) {
                                     Icon(
                                         imageVector = if (isFullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
                                         contentDescription = if (isFullscreen) "Выйти из полноэкранного режима" else "Войти в полноэкранный режим",
-                                        tint = Color.White,
+                                        tint = if (isFullFocused) Color.Black else Color.White,
                                         modifier = Modifier.size(24.dp)
                                     )
                                 }
@@ -591,16 +577,18 @@ fun VideoPlayer(
                                 Spacer(modifier = Modifier.width(8.dp))
 
                                 // Aspect Ratio Toggle
+                                var isResizeFocused by remember { mutableStateOf(false) }
                                 IconButton(
                                     onClick = onToggleResizeMode,
                                     modifier = Modifier
-                                        .background(Color.Black.copy(alpha = 0.7f), CircleShape)
+                                        .onFocusChanged { isResizeFocused = it.isFocused }
+                                        .background(if (isResizeFocused) SkyBlue else Color.Black.copy(alpha = 0.7f), CircleShape)
                                         .size(38.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Filled.AspectRatio,
                                         contentDescription = "Соотношение сторон",
-                                        tint = CinemaAmber,
+                                        tint = if (isResizeFocused) Color.Black else CinemaAmber,
                                         modifier = Modifier.size(22.dp)
                                     )
                                 }

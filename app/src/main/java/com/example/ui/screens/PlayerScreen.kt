@@ -27,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.*
 import androidx.compose.ui.input.pointer.pointerInput
@@ -58,7 +59,6 @@ fun PlayerScreen(
     val selectedChannel by viewModel.selectedChannel.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
     val archiveSchedule by viewModel.archiveSchedule.collectAsState()
-    val activeRecordingUrls by viewModel.activeRecordingUrls.collectAsState()
     val playMode by viewModel.playMode.collectAsState()
     val resizeMode by viewModel.videoResizeMode.collectAsState()
     
@@ -138,11 +138,8 @@ fun PlayerScreen(
                 .background(if (isFullscreen) Color.Black else MaterialTheme.colorScheme.background)
         ) {
             // SHARED VIDEO PLAYER SECTION
-            val isCurrentRecording = selectedChannel?.let { viewModel.activeRecordingUrls.value.contains(it.streamUrl) } ?: false
-            
             VideoPlayer(
                 streamUrl = when (playMode) {
-                    is AppViewModel.PlayMediaMode.RecordingPlay -> (playMode as AppViewModel.PlayMediaMode.RecordingPlay).recording.streamUrl
                     is AppViewModel.PlayMediaMode.ArchivePlay -> {
                         val base = selectedChannel?.streamUrl
                         if (base != null) {
@@ -157,7 +154,6 @@ fun PlayerScreen(
                 title = selectedChannel?.name ?: "ТВ Плеер",
                 logoUrl = selectedChannel?.logoUrl,
                 mode = playMode,
-                isRecording = isCurrentRecording,
                 isFullscreen = isFullscreen,
                 resizeMode = resizeMode,
                 onToggleFullscreen = { viewModel.setFullscreen(!isFullscreen) },
@@ -215,8 +211,7 @@ fun PlayerScreen(
                         .focusable()
                 } else {
                     Modifier.fillMaxWidth().aspectRatio(16f / 9f)
-                },
-                onToggleRecording = { viewModel.toggleRecordingActiveChannel() }
+                }
             )
 
             if (!isFullscreen) {
@@ -267,16 +262,23 @@ fun PlayerScreen(
                 }
 
                 // 3. EXPANDABLE SPOILER (EPG / TV ARCHIVE GUIDE)
+                var isSpoilerFocused by remember { mutableStateOf(false) }
                 Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp, vertical = 6.dp)
+                                    .onFocusChanged { isSpoilerFocused = it.isFocused }
+                                    .focusable()
                                     .testTag("epg_spoiler_card"),
                                 colors = CardDefaults.cardColors(
-                                    containerColor = SlateCard
+                                    containerColor = if (isSpoilerFocused) SlateFocus else SlateCard
                                 ),
                                 shape = RoundedCornerShape(12.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                                border = if (isSpoilerFocused) {
+                                    BorderStroke(2.dp, Color.White)
+                                } else {
+                                    BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                                }
                             ) {
                                 Column {
                                     // Spoiler Header
@@ -420,13 +422,19 @@ fun PlayerScreen(
                 ) {
                     items(allCategories) { category ->
                         val isSelected = selectedCategory == category
+                        var isFocused by remember { mutableStateOf(false) }
+                        
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(16.dp))
+                                .onFocusChanged { isFocused = it.isFocused }
                                 .background(if (isSelected) MaterialTheme.colorScheme.primary else SlateCard)
                                 .then(
-                                    if (isSelected) {
-                                        Modifier
+                                    if (isSelected || isFocused) {
+                                        Modifier.border(
+                                            androidx.compose.foundation.BorderStroke(2.dp, if (isFocused) Color.White else Color.Transparent),
+                                            RoundedCornerShape(16.dp)
+                                        )
                                     } else {
                                         Modifier.background(SlateCard).border(
                                             androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
@@ -435,6 +443,7 @@ fun PlayerScreen(
                                     }
                                 )
                                 .clickable { viewModel.selectCategory(category) }
+                                .focusable()
                                 .padding(horizontal = 16.dp, vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -483,11 +492,12 @@ fun PlayerScreen(
                     
                     items(filteredChannels) { channel ->
                         val isSelected = selectedChannel?.id == channel.id
-                        val isRecording = activeRecordingUrls.contains(channel.streamUrl)
+                        var isFocused by remember { mutableStateOf(false) }
                         
                         Card(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .onFocusChanged { isFocused = it.isFocused }
                                 .combinedClickable(
                                     onClick = {
                                         if (channel.isLocked && parentalEnabled && !isParentalUnlocked) {
@@ -502,14 +512,15 @@ fun PlayerScreen(
                                         viewModel.toggleChannelLock(channel)
                                     }
                                 )
+                                .focusable()
                                 .testTag("channel_card_${channel.id}"),
                             colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) SlateFocus else SlateCard
+                                containerColor = if (isSelected || isFocused) SlateFocus else SlateCard
                             ),
-                            border = if (isSelected) {
-                                androidx.compose.foundation.BorderStroke(1.5.dp, CinemaAmber)
+                            border = if (isSelected || isFocused) {
+                                BorderStroke(2.dp, if (isFocused) Color.White else CinemaAmber)
                             } else {
-                                androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
+                                BorderStroke(1.dp, Color.White.copy(alpha = 0.05f))
                             },
                             shape = RoundedCornerShape(16.dp)
                         ) {
@@ -573,15 +584,6 @@ fun PlayerScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
-                                    if (isRecording) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(8.dp)
-                                                .clip(CircleShape)
-                                                .background(LiveRed)
-                                        )
-                                    }
-                                    
                                     if (channel.isLocked && parentalEnabled) {
                                         IconButton(
                                             onClick = { viewModel.toggleChannelLock(channel) },
@@ -653,22 +655,28 @@ fun PlayerScreen(
                         )
                         LazyColumn(modifier = Modifier.weight(1f)) {
                             items(archiveSchedule) { program ->
+                                var isItemFocused by remember { mutableStateOf(false) }
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .onFocusChanged { isItemFocused = it.isFocused }
+                                        .clickable(enabled = program.isArchive) {
+                                            viewModel.selectArchiveEpisode(program)
+                                        }
+                                        .focusable()
                                         .padding(vertical = 4.dp),
                                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
                                     Text(
                                         text = program.startTimeString,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = SkyBlue,
+                                        color = if (isItemFocused) CinemaAmber else SkyBlue,
                                         fontWeight = FontWeight.Bold
                                     )
                                     Text(
                                         text = program.title,
                                         style = MaterialTheme.typography.bodyMedium,
-                                        color = Color.White
+                                        color = if (isItemFocused) CinemaAmber else Color.White
                                     )
                                 }
                             }
@@ -712,17 +720,22 @@ fun PlayerScreen(
                         ) {
                             items(filteredChannels) { channel ->
                                 val isNowSelected = selectedChannel?.id == channel.id
+                                var isOverlayFocused by remember { mutableStateOf(false) }
+                                
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
+                                        .onFocusChanged { isOverlayFocused = it.isFocused }
                                         .clickable { 
                                             viewModel.selectChannel(channel)
                                             showFullscreenChannels = false
-                                        },
+                                        }
+                                        .focusable(),
                                     colors = CardDefaults.cardColors(
-                                        containerColor = if (isNowSelected) SlateFocus else SlateCard.copy(alpha = 0.6f)
+                                        containerColor = if (isNowSelected || isOverlayFocused) SlateFocus else SlateCard.copy(alpha = 0.6f)
                                     ),
-                                    border = BorderStroke(1.dp, if (isNowSelected) CinemaAmber else Color.White.copy(alpha = 0.1f))
+                                    border = BorderStroke(2.dp, if (isOverlayFocused) Color.White else if (isNowSelected) CinemaAmber else Color.White.copy(alpha = 0.1f)),
+                                    shape = RoundedCornerShape(16.dp)
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(12.dp),

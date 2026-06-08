@@ -1,10 +1,13 @@
 package com.example.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -88,6 +92,7 @@ fun PlaylistsScreen(
             }
 
             // Add FAB
+            var isFabFocused by remember { mutableStateOf(false) }
             FloatingActionButton(
                 onClick = {
                     playlistName = ""
@@ -98,7 +103,15 @@ fun PlaylistsScreen(
                 },
                 containerColor = CinemaAmber,
                 contentColor = Color.Black,
-                modifier = Modifier.testTag("add_playlist_fab")
+                modifier = Modifier
+                    .onFocusChanged { isFabFocused = it.isFocused }
+                    .border(
+                        if (isFabFocused) 2.dp else 0.dp,
+                        if (isFabFocused) Color.White else Color.Transparent,
+                        CircleShape
+                    )
+                    .focusable()
+                    .testTag("add_playlist_fab")
             ) {
                 Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить")
             }
@@ -147,14 +160,20 @@ fun PlaylistsScreen(
                 }
 
                 items(playlists) { playlist ->
+                    var isCardFocused by remember { mutableStateOf(false) }
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .onFocusChanged { isCardFocused = it.isFocused }
+                            .border(
+                                if (isCardFocused) 2.dp else 0.dp,
+                                if (isCardFocused) Color.White else Color.Transparent,
+                                RoundedCornerShape(16.dp)
+                            )
                             .testTag("playlist_card_${playlist.id}"),
                         colors = CardDefaults.cardColors(
                             containerColor = SlateCard
                         ),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.05f)),
                         shape = RoundedCornerShape(16.dp)
                     ) {
                         Row(
