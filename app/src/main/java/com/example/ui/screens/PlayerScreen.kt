@@ -483,21 +483,35 @@ private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean,
                     var isItemFocused by remember { mutableStateOf(false) }
                     Card(
                         modifier = Modifier
+                            .fillMaxWidth()
+                            .height(80.dp)
                             .onFocusChanged { isItemFocused = it.isFocused }
                             .clickable { viewModel.selectChannel(ch); onChannels(false) }
-                            .focusable(),
+                            .focusable()
+                            .glassmorphism(
+                                shape = RoundedCornerShape(8.dp),
+                                backgroundColor = if (isItemFocused) CinemaAmber.copy(alpha = 0.8f) else Color.White.copy(alpha = 0.1f),
+                                borderColor = Color.White.copy(alpha = 0.1f)
+                            ),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isItemFocused) CinemaAmber else Color.Transparent
+                            containerColor = Color.Transparent
                         ),
                         border = if (isItemFocused) BorderStroke(2.dp, Color.White) else null
                     ) {
-                        Text(
-                            ch.name, 
-                            color = if (isItemFocused) Color.Black else Color.White, 
-                            modifier = Modifier.padding(12.dp), 
-                            maxLines = 1,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                                AsyncImage(model = ch.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(4.dp))
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                ch.name, 
+                                color = Color.White, 
+                                modifier = Modifier.weight(1f), 
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
