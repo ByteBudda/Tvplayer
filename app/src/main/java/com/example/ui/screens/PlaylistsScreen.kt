@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.Playlist
 import com.example.data.Channel
@@ -933,27 +934,27 @@ private fun PlaylistsContent(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
+            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                 Text(
                     text = "Плейлисты IPTV",
                     color = MaterialTheme.colorScheme.onBackground,
                     style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = "Добавление M3U и XML файлов",
+                    text = "Добавление M3U файлов",
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                IconButton(onClick = onShowAbout) {
-                    Icon(imageVector = Icons.Default.Info, contentDescription = "О программе", tint = MaterialTheme.colorScheme.onBackground)
-                }
-
                 var isImportFocused by remember { mutableStateOf(false) }
-                OutlinedButton(
+                Button(
                     onClick = onImport,
                     modifier = Modifier
                         .onFocusChanged { isImportFocused = it.isFocused }
@@ -963,16 +964,17 @@ private fun PlaylistsContent(
                             RoundedCornerShape(8.dp)
                         )
                         .focusable(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CinemaAmber),
-                    border = BorderStroke(1.dp, CinemaAmber.copy(alpha = 0.5f))
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.surfaceVariant, contentColor = MaterialTheme.colorScheme.onSurface),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Icon(imageVector = Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("Импорт")
+                    Text("Файл")
                 }
                 
                 var isAddFocused by remember { mutableStateOf(false) }
-                OutlinedButton(
+                Button(
                     onClick = onAdd,
                     modifier = Modifier
                         .onFocusChanged { isAddFocused = it.isFocused }
@@ -982,30 +984,17 @@ private fun PlaylistsContent(
                             RoundedCornerShape(8.dp)
                         )
                         .focusable(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CinemaAmber),
-                    border = BorderStroke(1.dp, CinemaAmber.copy(alpha = 0.5f))
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CinemaAmber, contentColor = Color.Black),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                 ) {
                     Icon(imageVector = Icons.Filled.Link, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text("Ссылка")
                 }
 
-                var isFabFocused by remember { mutableStateOf(false) }
-                FloatingActionButton(
-                    onClick = onAdd,
-                    containerColor = CinemaAmber,
-                    contentColor = Color.Black,
-                    modifier = Modifier
-                        .onFocusChanged { isFabFocused = it.isFocused }
-                        .border(
-                            if (isFabFocused) 2.dp else 0.dp,
-                            if (isFabFocused) Color.White else Color.Transparent,
-                            CircleShape
-                        )
-                        .focusable(),
-                    shape = CircleShape
-                ) {
-                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить")
+                IconButton(onClick = onShowAbout) {
+                    Icon(imageVector = Icons.Default.Info, contentDescription = "О программе", tint = MaterialTheme.colorScheme.onBackground)
                 }
             }
         }
