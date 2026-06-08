@@ -13,27 +13,39 @@ import java.util.TimeZone
 object IptvParser {
     private const val TAG = "IptvParser"
 
-    fun parseM3u(playlistId: Long, m3uContent: String): List<Channel> {
+    data class M3uParseResult(
+        val channels: List<Channel>,
+        val epgUrls: List<String>
+    )
+
+    fun parseM3u(playlistId: Long, m3uContent: String): M3uParseResult {
         val channels = mutableListOf<Channel>()
+        val epgUrls = mutableSetOf<String>()
         var currentLogoUrl: String? = null
         var currentCategory: String? = null
         var currentName: String? = null
         var currentTvgId: String? = null
         var currentTvgName: String? = null
 
-        // Safe maximum threshold limit of 1000 items per custom playlist to prevent Room CursorWindow crashes
-        val maxChannels = 1000
+        // Safe maximum threshold limit of 3000 items per custom playlist to prevent Room CursorWindow crashes
+        val maxChannels = 3000
 
         m3uContent.lineSequence().forEach { rawLine ->
             val line = rawLine.trim()
             if (line.isEmpty()) return@forEach
 
-            if (line.startsWith("#EXTINF:")) {
+            if (line.startsWith("#EXTM3U")) {
+                parseAttribute(line, "tvg-url")?.let { epgUrls.add(it) }
+                parseAttribute(line, "x-tvg-url")?.let { epgUrls.add(it) }
+                parseAttribute(line, "url-tvg")?.let { epgUrls.add(it) }
+            } else if (line.startsWith("#EXTINF:")) {
                 // Parse attributes
                 currentLogoUrl = parseAttribute(line, "tvg-logo") ?: parseAttribute(line, "logo")
                 currentCategory = parseAttribute(line, "group-title") ?: parseAttribute(line, "category")
                 val tvgId = parseAttribute(line, "tvg-id")
                 val tvgName = parseAttribute(line, "tvg-name")
+                
+                parseAttribute(line, "tvg-url")?.let { epgUrls.add(it) }
                 
                 // Name is after the last comma
                 val commaIndex = line.lastIndexOf(',')
@@ -70,7 +82,7 @@ object IptvParser {
             }
         }
 
-        return channels
+        return M3uParseResult(channels, epgUrls.toList())
     }
 
     private fun parseAttribute(line: String, attributeName: String): String? {
@@ -190,7 +202,7 @@ object IptvParser {
                                     epgChannelNames[progChannelId!!] = chName!!
                                     progChannelId = null
                                     chName = null
-                                } else if (chName != null && chUrl != null && channels.size < 1000) {
+                                } else if (chName != null && chUrl != null && channels.size < 3000) {
                                     // Custom XML playlist channel: <channel><name>...</name><url>...</url></channel>
                                     channels.add(
                                         Channel(
@@ -224,7 +236,7 @@ object IptvParser {
                                         )
                                         
                                         val list = programs.getOrPut(progChannelId!!) { mutableListOf() }
-                                        if (list.size < 100) { // Increased limit for better EPG
+                                        if (list.size < 500) { // Increased limit for better EPG coverage
                                             list.add(episode)
                                         }
                                     } catch (e: Exception) {

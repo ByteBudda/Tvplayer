@@ -13,10 +13,17 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 
 class AppRepository(
-    private val appDao: AppDao,
+    internal val appDao: AppDao,
     private val context: Context
 ) {
-    private val client = OkHttpClient()
+    suspend fun getAllPlaylists(): List<Playlist> = appDao.getAllPlaylists()
+    suspend fun getAllEpgSources(): List<EpgSource> = appDao.getAllEpgSources()
+
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
 
     val playlists: Flow<List<Playlist>> = appDao.getAllPlaylistsFlow()
     val allChannels: Flow<List<Channel>> = appDao.getAllChannelsFlow()
@@ -32,8 +39,10 @@ class AppRepository(
         
         sources.forEach { source ->
             try {
+                Log.d("Repository", "Starting EPG fetch from: ${source.url}")
                 fetchUrlStream(source.url).use { inputStream ->
                     val result = IptvParser.parseXml(0, inputStream)
+                    Log.d("Repository", "Parsed ${result.programs.size} channels from ${source.url}")
                     result.programs.forEach { (chanId, eps) ->
                         // Add by ID
                         val list = newCache.getOrPut(chanId) { mutableListOf() }
@@ -50,6 +59,8 @@ class AppRepository(
                 Log.e("Repository", "Failed to refresh EPG from ${source.url}", e)
             }
         }
+
+        Log.d("Repository", "Total unique EPG keys in cache: ${newCache.size}")
 
         // Sort episodes by time for each channel
         newCache.forEach { (_, list) ->
@@ -103,7 +114,8 @@ class AppRepository(
         
         try {
             if (type == "m3u") {
-                val parsedChannels = IptvParser.parseM3u(id, content)
+                val m3uResult = IptvParser.parseM3u(id, content)
+                val parsedChannels = m3uResult.channels
                 if (parsedChannels.isNotEmpty()) {
                     appDao.deleteChannelsByPlaylist(id)
                     parsedChannels.chunked(100).forEach { chunk ->
@@ -164,7 +176,16 @@ class AppRepository(
         try {
             if (playlist.type == "m3u") {
                 val content = fetchUrlContent(playlist.url)
-                val parsedChannels = IptvParser.parseM3u(playlistId, content)
+                val m3uResult = IptvParser.parseM3u(playlistId, content)
+                val parsedChannels = m3uResult.channels
+                
+                // Automatically add EPG sources found in M3U
+                m3uResult.epgUrls.forEach { epgUrl ->
+                    if (appDao.getAllEpgSources().none { it.url == epgUrl }) {
+                        appDao.insertEpgSource(EpgSource(name = "Auto: ${playlist.name}", url = epgUrl))
+                    }
+                }
+
                 if (parsedChannels.isNotEmpty()) {
                     appDao.deleteChannelsByPlaylist(playlistId)
                     parsedChannels.chunked(100).forEach { chunk ->

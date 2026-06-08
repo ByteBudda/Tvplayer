@@ -94,11 +94,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
             // Preload default built-in playlist if there are no playlists (safe one-shot check on startup)
             try {
-                val list = repository.playlists.first()
-                if (list.isEmpty()) {
+                val currentLists = repository.appDao.getAllPlaylists()
+                if (currentLists.isEmpty()) {
                     _isRefreshing.value = true
                     repository.addBuiltInPlaylist(
-                        name = "Стабильный Эфир ТВ",
+                        name = "IPTV Основной",
+                        url = "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVru.m3u"
+                    )
+                    repository.addBuiltInPlaylist(
+                        name = "IPTV Стабильный",
                         url = "https://raw.githubusercontent.com/smolnp/IPTVru/refs/heads/gh-pages/IPTVstable.m3u8"
                     )
                 }
@@ -123,8 +127,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Initial EPG refresh
         viewModelScope.launch {
             repository.refreshEpg()
-            _selectedChannel.value?.let { ch ->
-                _archiveSchedule.value = repository.fetchChannelArchiveSchedule(ch)
+        }
+
+        // Re-fetch current schedule when refresh finishes
+        viewModelScope.launch {
+            isRefreshing.collect { refreshing ->
+                if (!refreshing) {
+                    _selectedChannel.value?.let { ch ->
+                        _archiveSchedule.value = repository.fetchChannelArchiveSchedule(ch)
+                    }
+                }
             }
         }
     }
