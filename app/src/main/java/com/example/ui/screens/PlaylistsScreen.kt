@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -887,6 +888,7 @@ fun PlaylistsScreen(
 
     // About Dialog
     if (showAboutDialog) {
+        val uriHandler = LocalUriHandler.current
         androidx.compose.ui.window.Dialog(
             onDismissRequest = { showAboutDialog = false }
         ) {
@@ -898,6 +900,10 @@ fun PlaylistsScreen(
                 Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     Text("О программе", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text("Автор: bytebudda")
+                    TextButton(onClick = { uriHandler.openUri("https://github.com/ByteBudda") }) {
+                        Text("GitHub: github.com/ByteBudda")
+                    }
+                    Text("Лицензия: MIT")
                     Text("Это опенсорс приложение, плейлисты из открытых источников и никакой ответственности мы не несём за контент.")
                     Button(onClick = { showAboutDialog = false }, modifier = Modifier.align(Alignment.End)) {
                         Text("Закрыть")
