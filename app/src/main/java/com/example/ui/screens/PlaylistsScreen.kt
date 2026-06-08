@@ -264,14 +264,28 @@ fun PlaylistsScreen(
     // Modal Edit Playlist Dialog
     if (showEditDialog && playlistToEdit != null) {
         val current = playlistToEdit!!
-        AlertDialog(
-            onDismissRequest = { showEditDialog = false },
-            title = { Text("Редактировать плейлист") },
-            text = {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { showEditDialog = false }
+        ) {
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier = Modifier
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
+                    Text(
+                        text = "Редактировать плейлист",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
                     OutlinedTextField(
                         value = editName,
                         onValueChange = { editName = it },
@@ -315,33 +329,35 @@ fun PlaylistsScreen(
                             Text("XML Playlist")
                         }
                     }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (editName.isNotBlank() && editUrl.isNotBlank()) {
-                            viewModel.editPlaylist(
-                                current.copy(
-                                    name = editName,
-                                    url = editUrl,
-                                    type = editType
-                                )
-                            )
-                            showEditDialog = false
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(onClick = { showEditDialog = false }) {
+                            Text("Отмена")
                         }
-                    },
-                    modifier = Modifier.testTag("playlist_edit_confirm")
-                ) {
-                    Text("Сохранить")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showEditDialog = false }) {
-                    Text("Отмена")
+                        Button(
+                            onClick = {
+                                if (editName.isNotBlank() && editUrl.isNotBlank()) {
+                                    viewModel.editPlaylist(
+                                        current.copy(
+                                            name = editName,
+                                            url = editUrl,
+                                            type = editType
+                                        )
+                                    )
+                                    showEditDialog = false
+                                }
+                            },
+                            modifier = Modifier.testTag("playlist_edit_confirm")
+                        ) {
+                            Text("Сохранить")
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 
     // Manage Channels Dialog
