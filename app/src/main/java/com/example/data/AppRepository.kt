@@ -38,6 +38,41 @@ class AppRepository(
         id
     }
 
+    suspend fun importPlaylistFromContent(name: String, content: String, type: String = "m3u"): Long = withContext(Dispatchers.IO) {
+        val playlist = Playlist(
+            name = name,
+            url = "local_file_import_${System.currentTimeMillis()}", // Placeholder for local imports
+            isBuiltIn = false,
+            type = type
+        )
+        val id = appDao.insertPlaylist(playlist)
+        
+        try {
+            if (type == "m3u") {
+                val parsedChannels = IptvParser.parseM3u(id, content)
+                if (parsedChannels.isNotEmpty()) {
+                    appDao.deleteChannelsByPlaylist(id)
+                    parsedChannels.chunked(100).forEach { chunk ->
+                        appDao.insertChannels(chunk)
+                    }
+                }
+            } else {
+                val result = IptvParser.parseXml(id, content)
+                if (result.channels.isNotEmpty()) {
+                    appDao.deleteChannelsByPlaylist(id)
+                    result.channels.chunked(100).forEach { chunk ->
+                        appDao.insertChannels(chunk)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("Repository", "Failed to import playlist content", e)
+            appDao.deletePlaylistById(id)
+            throw e
+        }
+        id
+    }
+
     suspend fun addBuiltInPlaylist(name: String, url: String): Long = withContext(Dispatchers.IO) {
         // Check if already exists
         val currentPlaylists = appDao.getAllPlaylists()
@@ -65,6 +100,11 @@ class AppRepository(
     suspend fun refreshPlaylist(playlistId: Long) = withContext(Dispatchers.IO) {
         val playlists = appDao.getAllPlaylists()
         val playlist = playlists.find { it.id == playlistId } ?: return@withContext
+
+        // Skip refresh for local imports as they don't have a valid remote URL
+        if (playlist.url.startsWith("local_file_import_")) {
+            return@withContext
+        }
 
         try {
             val content = fetchUrlContent(playlist.url)

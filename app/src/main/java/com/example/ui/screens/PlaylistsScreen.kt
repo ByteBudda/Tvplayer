@@ -1,5 +1,8 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -28,6 +32,8 @@ import com.example.ui.theme.CinemaAmber
 import com.example.ui.theme.LiveRed
 import com.example.ui.theme.SkyBlue
 import com.example.ui.theme.SlateCard
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
 @Composable
 fun PlaylistsScreen(
@@ -36,12 +42,32 @@ fun PlaylistsScreen(
 ) {
     val playlists by viewModel.playlists.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val context = LocalContext.current
 
     var showAddDialog by remember { mutableStateOf(false) }
     var playlistName by remember { mutableStateOf("") }
     var playlistUrl by remember { mutableStateOf("") }
     var playlistType by remember { mutableStateOf("m3u") } // "m3u" or "xml"
     var isInputError by remember { mutableStateOf(false) }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri?.let {
+            try {
+                val inputStream = context.contentResolver.openInputStream(it)
+                val reader = BufferedReader(InputStreamReader(inputStream))
+                val content = reader.readText()
+                inputStream?.close()
+                
+                // Use the filename or a generic name
+                val fileName = "Импорт ${System.currentTimeMillis() % 10000}"
+                viewModel.importPlaylist(fileName, content, "m3u")
+            } catch (e: Exception) {
+                // Error handling could be added here (e.g., a snackbar)
+            }
+        }
+    }
 
     var showEditDialog by remember { mutableStateOf(false) }
     var playlistToEdit by remember { mutableStateOf<Playlist?>(null) }
@@ -91,9 +117,32 @@ fun PlaylistsScreen(
                 )
             }
 
-            // Add FAB
-            var isFabFocused by remember { mutableStateOf(false) }
-            FloatingActionButton(
+            // Actions
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Import File Button
+                var isImportFocused by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = { filePickerLauncher.launch("*/*") },
+                    modifier = Modifier
+                        .onFocusChanged { isImportFocused = it.isFocused }
+                        .border(
+                            if (isImportFocused) 2.dp else 0.dp,
+                            if (isImportFocused) Color.White else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .focusable()
+                        .testTag("import_playlist_button"),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CinemaAmber),
+                    border = BorderStroke(1.dp, CinemaAmber.copy(alpha = 0.5f))
+                ) {
+                    Icon(imageVector = Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Импорт M3U")
+                }
+
+                // Add FAB
+                var isFabFocused by remember { mutableStateOf(false) }
+                FloatingActionButton(
                 onClick = {
                     playlistName = ""
                     playlistUrl = ""
@@ -112,8 +161,9 @@ fun PlaylistsScreen(
                     )
                     .focusable()
                     .testTag("add_playlist_fab")
-            ) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить")
+                ) {
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить")
+                }
             }
         }
 

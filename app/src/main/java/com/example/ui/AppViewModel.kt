@@ -172,6 +172,19 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun importPlaylist(name: String, content: String, type: String) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                repository.importPlaylistFromContent(name, content, type)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed importing playlist", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
     fun deletePlaylist(playlistId: Long) {
         viewModelScope.launch {
             repository.deletePlaylist(playlistId)
