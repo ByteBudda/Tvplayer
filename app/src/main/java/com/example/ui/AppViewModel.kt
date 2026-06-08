@@ -30,6 +30,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val categories: StateFlow<List<String>> = repository.categories
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val epgSources: StateFlow<List<EpgSource>> = repository.epgSources
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Active Selection State
     private val _selectedChannel = MutableStateFlow<Channel?>(null)
     val selectedChannel: StateFlow<Channel?> = _selectedChannel.asStateFlow()
@@ -110,10 +113,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             selectedChannel.collectLatest { channel ->
                 if (channel != null) {
-                    _archiveSchedule.value = repository.fetchChannelArchiveSchedule(channel.name)
+                    _archiveSchedule.value = repository.fetchChannelArchiveSchedule(channel)
                 } else {
                     _archiveSchedule.value = emptyList()
                 }
+            }
+        }
+
+        // Initial EPG refresh
+        viewModelScope.launch {
+            repository.refreshEpg()
+            _selectedChannel.value?.let { ch ->
+                _archiveSchedule.value = repository.fetchChannelArchiveSchedule(ch)
             }
         }
     }
@@ -279,6 +290,52 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 repository.refreshPlaylist(playlistId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed refreshing playlist", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    // --- EPG SOURCE ENGINE ---
+    fun addEpgSource(name: String, url: String) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                repository.addEpgSource(name, url)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed adding EPG source", e)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    fun deleteEpgSource(id: Long) {
+        viewModelScope.launch {
+            repository.deleteEpgSource(id)
+        }
+    }
+
+    fun toggleEpgSource(id: Long, active: Boolean) {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                repository.toggleEpgSource(id, active)
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
+
+    fun refreshEpg() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                repository.refreshEpg()
+                // Update current channel schedule after refresh
+                _selectedChannel.value?.let { ch ->
+                    _archiveSchedule.value = repository.fetchChannelArchiveSchedule(ch)
+                }
             } finally {
                 _isRefreshing.value = false
             }

@@ -62,6 +62,25 @@ interface AppDao {
     @Query("UPDATE channel SET isLocked = :isLocked WHERE id = :channelId")
     suspend fun updateLocked(channelId: Long, isLocked: Boolean)
 
+    // --- EPG SOURCES ---
+    @Query("SELECT * FROM epg_source")
+    fun getAllEpgSourcesFlow(): Flow<List<EpgSource>>
+
+    @Query("SELECT * FROM epg_source")
+    suspend fun getAllEpgSources(): List<EpgSource>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertEpgSource(source: EpgSource): Long
+
+    @Update
+    suspend fun updateEpgSource(source: EpgSource)
+
+    @Query("DELETE FROM epg_source WHERE id = :sourceId")
+    suspend fun deleteEpgSourceById(sourceId: Long)
+
+    @Query("UPDATE epg_source SET isActive = :isActive WHERE id = :sourceId")
+    suspend fun updateEpgSourceActive(sourceId: Long, isActive: Boolean)
+
     // --- APP SETTINGS ---
     @Query("SELECT * FROM app_setting WHERE `key` = :key LIMIT 1")
     suspend fun getSetting(key: String): AppSetting?

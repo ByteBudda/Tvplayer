@@ -20,8 +20,18 @@ data class Channel(
     val streamUrl: String,
     val logoUrl: String? = null,
     val category: String? = null,
+    val tvgId: String? = null,
+    val tvgName: String? = null,
     val isLocked: Boolean = false,
     val isFavorite: Boolean = false
+)
+
+@Entity(tableName = "epg_source")
+data class EpgSource(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val name: String,
+    val url: String,
+    val isActive: Boolean = true
 )
 
 @Entity(tableName = "app_setting")

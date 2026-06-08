@@ -18,6 +18,8 @@ object IptvParser {
         var currentLogoUrl: String? = null
         var currentCategory: String? = null
         var currentName: String? = null
+        var currentTvgId: String? = null
+        var currentTvgName: String? = null
 
         // Safe maximum threshold limit of 1000 items per custom playlist to prevent Room CursorWindow crashes
         val maxChannels = 1000
@@ -30,6 +32,8 @@ object IptvParser {
                 // Parse attributes
                 currentLogoUrl = parseAttribute(line, "tvg-logo") ?: parseAttribute(line, "logo")
                 currentCategory = parseAttribute(line, "group-title") ?: parseAttribute(line, "category")
+                val tvgId = parseAttribute(line, "tvg-id")
+                val tvgName = parseAttribute(line, "tvg-name")
                 
                 // Name is after the last comma
                 val commaIndex = line.lastIndexOf(',')
@@ -38,6 +42,10 @@ object IptvParser {
                 } else {
                     currentName = "Неизвестный канал"
                 }
+
+                // Temporary storage for tvgId and tvgName to be used when creating Channel
+                currentTvgId = tvgId
+                currentTvgName = tvgName
             } else if (!line.startsWith("#") && (line.startsWith("http") || line.startsWith("rtmp") || line.contains("://"))) {
                 if (channels.size >= maxChannels) {
                     return@forEach
@@ -49,12 +57,16 @@ object IptvParser {
                         name = name,
                         streamUrl = line,
                         logoUrl = currentLogoUrl,
-                        category = currentCategory ?: "Общие"
+                        category = currentCategory ?: "Общие",
+                        tvgId = currentTvgId,
+                        tvgName = currentTvgName
                     )
                 )
                 currentLogoUrl = null
                 currentCategory = null
                 currentName = null
+                currentTvgId = null
+                currentTvgName = null
             }
         }
 
@@ -101,7 +113,7 @@ object IptvParser {
             parser.setInput(StringReader(xmlContent))
 
             var eventType = parser.eventType
-            var currentTag: String?
+            var currentTagName: String? = null
             
             // XMLTV variables
             var progStart: String? = null
@@ -121,10 +133,10 @@ object IptvParser {
             val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
-                currentTag = parser.name
                 when (eventType) {
                     XmlPullParser.START_TAG -> {
-                        when (currentTag) {
+                        currentTagName = parser.name
+                        when (currentTagName) {
                             // XMLTV tag
                             "programme" -> {
                                 progStart = parser.getAttributeValue(null, "start")
@@ -144,14 +156,14 @@ object IptvParser {
                     }
                     XmlPullParser.TEXT -> {
                         val text = parser.text.trim()
-                        if (text.isNotEmpty() && currentTag != null) {
-                            when (currentTag) {
+                        if (text.isNotEmpty() && currentTagName != null) {
+                            when (currentTagName) {
                                 // XMLTV elements
                                 "title" -> progTitle = text
                                 "desc" -> progDesc = text
                                 
                                 // Simple XML Playlist elements
-                                "name", "title" -> chName = text
+                                "name", "title" -> if (progChannelId == null) chName = text
                                 "url", "stream", "link" -> chUrl = text
                                 "logo", "image", "pic" -> chLogo = text
                                 "category", "genre" -> chCat = text
@@ -159,12 +171,13 @@ object IptvParser {
                         }
                     }
                     XmlPullParser.END_TAG -> {
-                        when (currentTag) {
+                        val tagAtEnd = parser.name
+                        when (tagAtEnd) {
                             "programme" -> {
                                 if (progChannelId != null && progTitle != null) {
                                     try {
-                                        val startMs = progStart?.let { xmltvDateFormat.parse(it)?.time } ?: 0L
-                                        val stopMs = progStop?.let { xmltvDateFormat.parse(it)?.time } ?: 0L
+                                        val startMs = progStart?.let { parseXmltvDate(it, xmltvDateFormat) } ?: 0L
+                                        val stopMs = progStop?.let { parseXmltvDate(it, xmltvDateFormat) } ?: 0L
                                         val startTimeStr = if (startMs > 0) timeFormat.format(startMs) else "--:--"
                                         val stopTimeStr = if (stopMs > 0) timeFormat.format(stopMs) else "--:--"
 
@@ -180,7 +193,7 @@ object IptvParser {
                                         )
                                         
                                         val list = programs.getOrPut(progChannelId!!) { mutableListOf() }
-                                        if (list.size < 50) {
+                                        if (list.size < 100) { // Increased limit for better EPG
                                             list.add(episode)
                                         }
                                     } catch (e: Exception) {
@@ -202,6 +215,7 @@ object IptvParser {
                                 }
                             }
                         }
+                        currentTagName = null
                     }
                 }
                 eventType = parser.next()
@@ -211,6 +225,22 @@ object IptvParser {
         }
 
         return XmlParseResult(channels, programs)
+    }
+
+    private fun parseXmltvDate(dateStr: String, format: SimpleDateFormat): Long {
+        return try {
+            format.parse(dateStr)?.time ?: 0L
+        } catch (e: Exception) {
+            // Fallback for dates without timezone: 20240101000000
+            try {
+                if (dateStr.length >= 14) {
+                    val fallback = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                    fallback.parse(dateStr.substring(0, 14))?.time ?: 0L
+                } else 0L
+            } catch (e2: Exception) {
+                0L
+            }
+        }
     }
 }
 

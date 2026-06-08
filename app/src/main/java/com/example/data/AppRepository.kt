@@ -21,6 +21,52 @@ class AppRepository(
     val playlists: Flow<List<Playlist>> = appDao.getAllPlaylistsFlow()
     val allChannels: Flow<List<Channel>> = appDao.getAllChannelsFlow()
     val categories: Flow<List<String>> = appDao.getAllCategoriesFlow()
+    val epgSources: Flow<List<EpgSource>> = appDao.getAllEpgSourcesFlow()
+
+    // In-memory EPG cache
+    private val epgCache = mutableMapOf<String, List<ProgramEpisode>>()
+
+    suspend fun refreshEpg() = withContext(Dispatchers.IO) {
+        val sources = appDao.getAllEpgSources().filter { it.isActive }
+        val newCache = mutableMapOf<String, MutableList<ProgramEpisode>>()
+        
+        sources.forEach { source ->
+            try {
+                val content = fetchUrlContent(source.url)
+                val result = IptvParser.parseXml(0, content) // id doesn't matter for EPG only
+                result.programs.forEach { (chanId, eps) ->
+                    val list = newCache.getOrPut(chanId) { mutableListOf() }
+                    list.addAll(eps)
+                }
+            } catch (e: Exception) {
+                Log.e("Repository", "Failed to refresh EPG from ${source.url}", e)
+            }
+        }
+
+        // Sort episodes by time for each channel
+        newCache.forEach { (_, list) ->
+            list.sortBy { it.startTimeMs }
+        }
+
+        synchronized(epgCache) {
+            epgCache.clear()
+            newCache.forEach { (k, v) -> epgCache[k] = v }
+        }
+    }
+
+    suspend fun addEpgSource(name: String, url: String) = withContext(Dispatchers.IO) {
+        appDao.insertEpgSource(EpgSource(name = name, url = url))
+        refreshEpg()
+    }
+
+    suspend fun deleteEpgSource(id: Long) = withContext(Dispatchers.IO) {
+        appDao.deleteEpgSourceById(id)
+    }
+
+    suspend fun toggleEpgSource(id: Long, active: Boolean) = withContext(Dispatchers.IO) {
+        appDao.updateEpgSourceActive(id, active)
+        refreshEpg()
+    }
 
     fun getChannelsByPlaylist(playlistId: Long): Flow<List<Channel>> {
         return appDao.getChannelsByPlaylistFlow(playlistId)
@@ -311,32 +357,37 @@ class AppRepository(
     }
 
     // --- EPG / ARCHIVE SCHEDULE FETCHING ---
-    suspend fun fetchChannelArchiveSchedule(channelName: String): List<ProgramEpisode> = withContext(Dispatchers.IO) {
-        // Return a highly structured schedule of past and present programs.
-        // We'll generate realistic schedules representing TV grid for that channel.
+    suspend fun fetchChannelArchiveSchedule(channel: Channel): List<ProgramEpisode> = withContext(Dispatchers.IO) {
+        // Try to find in cache first
+        synchronized(epgCache) {
+            val fromTvgId = channel.tvgId?.let { epgCache[it] }
+            if (fromTvgId != null) return@withContext fromTvgId
+
+            val fromTvgName = channel.tvgName?.let { epgCache[it] }
+            if (fromTvgName != null) return@withContext fromTvgName
+
+            val fromName = epgCache[channel.name]
+            if (fromName != null) return@withContext fromName
+        }
+
+        // Fallback to pseudo-realistic generated data if no real EPG found
         val list = mutableListOf<ProgramEpisode>()
         val currentTime = System.currentTimeMillis()
         val oneHourMs = 3600000L
-
         val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
-
-        // Add 5 past programs (the archive!) and 2 future programs
         val titlesMap = mapOf(
             "Спорт" to listOf("Обзор матчей ЛЧ", "Новости спорта", "Легендарные победы", "Формула-1 live", "Спортивная аналитика"),
             "Фильмы" to listOf("Художественный фильм", "Мировое кино", "Дом кино", "Новости Голливуда", "Истории актеров"),
             "Познавательные" to listOf("Дикая природа Африки", "Секреты Вселенной", "Разрушители легенд", "Как это устроено", "История Земли"),
             "Общие" to listOf("Утренние Новости", "Информационный канал", "Погода сегодня", "Ток-шоу 'Пусть Говорят'", "Вечерний обзор")
         )
-
         val category = when {
-            channelName.lowercase().contains("матч") || channelName.lowercase().contains("спорт") -> "Спорт"
-            channelName.lowercase().contains("кино") || channelName.lowercase().contains("фильм") -> "Фильмы"
-            channelName.lowercase().contains("discovery") || channelName.lowercase().contains("наука") -> "Познавательные"
+            channel.name.lowercase().contains("матч") || channel.name.lowercase().contains("спорт") -> "Спорт"
+            channel.name.lowercase().contains("кино") || channel.name.lowercase().contains("фильм") -> "Фильмы"
+            channel.name.lowercase().contains("discovery") || channel.name.lowercase().contains("наука") -> "Познавательные"
             else -> "Общие"
         }
-
         val titles = titlesMap[category] ?: titlesMap["Общие"]!!
-
         for (i in -5..2) {
             val startMs = currentTime + (i * oneHourMs)
             val stopMs = startMs + oneHourMs
@@ -347,9 +398,7 @@ class AppRepository(
             } else {
                 "Анонс: " + titles[(i + 2) % titles.size]
             }
-
-            val desc = "Увлекательная телепередача на канале $channelName. Запись доступна в высоком качестве."
-
+            val desc = "Увлекательная телепередача на канале ${channel.name}. Запись доступна в высоком качестве."
             list.add(
                 ProgramEpisode(
                     title = title,
@@ -358,7 +407,7 @@ class AppRepository(
                     endTimeString = sdf.format(stopMs),
                     startTimeMs = startMs,
                     endTimeMs = stopMs,
-                    isArchive = stopMs <= currentTime // Strictly in the past
+                    isArchive = stopMs <= currentTime
                 )
             )
         }

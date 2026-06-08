@@ -36,6 +36,10 @@ import com.example.ui.theme.SlateFocus
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import com.example.data.EpgSource
+import com.example.ui.theme.SlateFocus
+
 @Composable
 fun PlaylistsScreen(
     viewModel: AppViewModel,
@@ -50,6 +54,14 @@ fun PlaylistsScreen(
     var playlistUrl by remember { mutableStateOf("") }
     var playlistType by remember { mutableStateOf("m3u") } // "m3u" or "xml"
     var isInputError by remember { mutableStateOf(false) }
+
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Playlists, 1: EPG
+    val epgSources by viewModel.epgSources.collectAsState()
+
+    var showAddEpgDialog by remember { mutableStateOf(false) }
+    var epgName by remember { mutableStateOf("") }
+    var epgUrl by remember { mutableStateOf("") }
+    var isEpgInputError by remember { mutableStateOf(false) }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -98,276 +110,72 @@ fun PlaylistsScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = "Плейлисты IPTV",
-                    color = Color.White,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Добавление файлов вещаний M3U и XML",
-                    color = Color.White.copy(alpha = 0.6f),
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-
-            // Actions
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // Import File Button
-                var isImportFocused by remember { mutableStateOf(false) }
-                OutlinedButton(
-                    onClick = { filePickerLauncher.launch("*/*") },
-                    modifier = Modifier
-                        .onFocusChanged { isImportFocused = it.isFocused }
-                        .border(
-                            if (isImportFocused) 2.dp else 0.dp,
-                            if (isImportFocused) Color.White else Color.Transparent,
-                            RoundedCornerShape(8.dp)
-                        )
-                        .focusable()
-                        .testTag("import_playlist_button"),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CinemaAmber),
-                    border = BorderStroke(1.dp, CinemaAmber.copy(alpha = 0.5f))
-                ) {
-                    Icon(imageVector = Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Импорт M3U")
+        // Header Tabs
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+            contentColor = CinemaAmber,
+            divider = {},
+            indicator = { tabPositions ->
+                if (selectedTab < tabPositions.size) {
+                    TabRowDefaults.SecondaryIndicator(
+                        Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                        color = CinemaAmber
+                    )
                 }
+            },
+            modifier = Modifier.padding(bottom = 16.dp)
+        ) {
+            Tab(
+                selected = selectedTab == 0,
+                onClick = { selectedTab = 0 },
+                text = { Text("Плейлисты", fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal) }
+            )
+            Tab(
+                selected = selectedTab == 1,
+                onClick = { selectedTab = 1 },
+                text = { Text("EPG Сервисы", fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal) }
+            )
+        }
 
-                // Add FAB
-                var isFabFocused by remember { mutableStateOf(false) }
-                FloatingActionButton(
-                onClick = {
+        if (selectedTab == 0) {
+            PlaylistsContent(
+                playlists = playlists,
+                isRefreshing = isRefreshing,
+                onImport = { filePickerLauncher.launch("*/*") },
+                onAdd = {
                     playlistName = ""
                     playlistUrl = ""
                     playlistType = "m3u"
                     isInputError = false
                     showAddDialog = true
                 },
-                containerColor = CinemaAmber,
-                contentColor = Color.Black,
-                modifier = Modifier
-                    .onFocusChanged { isFabFocused = it.isFocused }
-                    .border(
-                        if (isFabFocused) 2.dp else 0.dp,
-                        if (isFabFocused) Color.White else Color.Transparent,
-                        CircleShape
-                    )
-                    .focusable()
-                    .testTag("add_playlist_fab")
-                ) {
-                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить")
-                }
-            }
-        }
-
-        if (isRefreshing) {
-            Box(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = CinemaAmber)
-            }
+                onManageChannels = { playlistToManageChannels = it },
+                onEdit = { 
+                    playlistToEdit = it
+                    editName = it.name
+                    editUrl = it.url
+                    editType = it.type
+                    showEditDialog = true
+                },
+                onRefresh = { viewModel.refreshPlaylist(it.id) },
+                onDelete = { viewModel.deletePlaylist(it.id) },
+                viewModel = viewModel
+            )
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                if (playlists.isEmpty()) {
-                    item {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.PlaylistRemove,
-                                contentDescription = "Пусто",
-                                tint = Color.Gray,
-                                modifier = Modifier.size(64.dp)
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            Text(
-                                "Плейлисты не загружены",
-                                color = Color.White,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                "Добавьте свой собственный список или подождите загрузки исходного",
-                                color = Color.White.copy(alpha = 0.5f),
-                                style = MaterialTheme.typography.bodySmall,
-                                modifier = Modifier.padding(top = 4.dp)
-                            )
-                        }
-                    }
-                }
-
-                items(playlists) { playlist ->
-                    var isCardFocused by remember { mutableStateOf(false) }
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { isCardFocused = it.isFocused }
-                            .border(
-                                if (isCardFocused) 2.dp else 0.dp,
-                                if (isCardFocused) Color.White else Color.Transparent,
-                                RoundedCornerShape(16.dp)
-                            )
-                            .focusable()
-                            .testTag("playlist_card_${playlist.id}"),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isCardFocused) SlateFocus else SlateCard
-                        ),
-                        shape = RoundedCornerShape(16.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                imageVector = if (playlist.type == "m3u") Icons.Filled.FeaturedPlayList else Icons.Filled.Code,
-                                contentDescription = "Тип плейлиста",
-                                tint = if (playlist.isBuiltIn) CinemaAmber else SkyBlue,
-                                modifier = Modifier.size(36.dp)
-                            )
-
-                            Spacer(modifier = Modifier.width(16.dp))
-
-                            Column(
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = playlist.name,
-                                        color = Color.White,
-                                        style = MaterialTheme.typography.bodyLarge,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    if (playlist.isBuiltIn) {
-                                        Box(
-                                            modifier = Modifier
-                                                .clip(RoundedCornerShape(4.dp))
-                                                .background(CinemaAmber.copy(alpha = 0.15f))
-                                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                                        ) {
-                                            Text(
-                                                "АКТИВЕН",
-                                                color = CinemaAmber,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-                                
-                                Text(
-                                    text = playlist.url,
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    maxLines = 1,
-                                    modifier = Modifier.padding(top = 2.dp)
-                                )
-                            }
-
-                            // Actions: Manage, Edit, Refresh, Delete
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                // Manage channels button
-                                var isManageFocused by remember { mutableStateOf(false) }
-                                IconButton(
-                                    onClick = {
-                                        playlistToManageChannels = playlist
-                                        viewModel.clearCleanResult()
-                                    },
-                                    modifier = Modifier
-                                        .onFocusChanged { isManageFocused = it.isFocused }
-                                        .background(if (isManageFocused) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape)
-                                        .focusable()
-                                        .testTag("manage_channels_${playlist.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.List,
-                                        contentDescription = "Каналы",
-                                        tint = if (isManageFocused) CinemaAmber else SkyBlue
-                                    )
-                                }
-
-                                // Edit playlist button
-                                var isEditFocused by remember { mutableStateOf(false) }
-                                IconButton(
-                                    onClick = {
-                                        playlistToEdit = playlist
-                                        editName = playlist.name
-                                        editUrl = playlist.url
-                                        editType = playlist.type
-                                        showEditDialog = true
-                                    },
-                                    modifier = Modifier
-                                        .onFocusChanged { isEditFocused = it.isFocused }
-                                        .background(if (isEditFocused) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape)
-                                        .focusable()
-                                        .testTag("edit_playlist_${playlist.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Edit,
-                                        contentDescription = "Редактировать плейлист",
-                                        tint = if (isEditFocused) Color.White else CinemaAmber
-                                    )
-                                }
-
-                                var isRefreshFocused by remember { mutableStateOf(false) }
-                                IconButton(
-                                    onClick = { viewModel.refreshPlaylist(playlist.id) },
-                                    modifier = Modifier
-                                        .onFocusChanged { isRefreshFocused = it.isFocused }
-                                        .background(if (isRefreshFocused) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape)
-                                        .focusable()
-                                        .testTag("refresh_playlist_${playlist.id}")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Filled.Refresh,
-                                        contentDescription = "Обновить записи",
-                                        tint = if (isRefreshFocused) CinemaAmber else Color.White
-                                    )
-                                }
-
-                                if (!playlist.isBuiltIn) {
-                                    var isDeleteFocused by remember { mutableStateOf(false) }
-                                    IconButton(
-                                        onClick = { viewModel.deletePlaylist(playlist.id) },
-                                        modifier = Modifier
-                                            .onFocusChanged { isDeleteFocused = it.isFocused }
-                                            .background(if (isDeleteFocused) LiveRed.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
-                                            .focusable()
-                                            .testTag("delete_playlist_${playlist.id}")
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Delete,
-                                            contentDescription = "Удалить плейлист",
-                                            tint = if (isDeleteFocused) Color.White else LiveRed
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            EpgSourcesContent(
+                sources = epgSources,
+                isRefreshing = isRefreshing,
+                onAdd = {
+                    epgName = ""
+                    epgUrl = ""
+                    isEpgInputError = false
+                    showAddEpgDialog = true
+                },
+                onRefresh = { viewModel.refreshEpg() },
+                onDelete = { viewModel.deleteEpgSource(it.id) },
+                onToggle = { source, active -> viewModel.toggleEpgSource(source.id, active) }
+            )
         }
     }
 
@@ -993,5 +801,316 @@ fun PlaylistsScreen(
                 }
             }
         )
+    }
+
+    // Modal Add EPG Dialog
+    if (showAddEpgDialog) {
+        AlertDialog(
+            onDismissRequest = { showAddEpgDialog = false },
+            title = { Text("Добавить EPG источник") },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedTextField(
+                        value = epgName,
+                        onValueChange = { epgName = it },
+                        label = { Text("Название") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    OutlinedTextField(
+                        value = epgUrl,
+                        onValueChange = { epgUrl = it },
+                        label = { Text("URL (XMLTV)") },
+                        singleLine = true,
+                        isError = isEpgInputError,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (epgName.isNotBlank() && epgUrl.isNotBlank()) {
+                            viewModel.addEpgSource(epgName, epgUrl)
+                            showAddEpgDialog = false
+                        } else {
+                            isEpgInputError = true
+                        }
+                    }
+                ) {
+                    Text("Добавить")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddEpgDialog = false }) {
+                    Text("Отмена")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+private fun PlaylistsContent(
+    playlists: List<Playlist>,
+    isRefreshing: Boolean,
+    onImport: () -> Unit,
+    onAdd: () -> Unit,
+    onManageChannels: (Playlist) -> Unit,
+    onEdit: (Playlist) -> Unit,
+    onRefresh: (Playlist) -> Unit,
+    onDelete: (Playlist) -> Unit,
+    viewModel: AppViewModel
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    text = "Плейлисты IPTV",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = "Добавление M3U и XML файлов",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                var isImportFocused by remember { mutableStateOf(false) }
+                OutlinedButton(
+                    onClick = onImport,
+                    modifier = Modifier
+                        .onFocusChanged { isImportFocused = it.isFocused }
+                        .border(
+                            if (isImportFocused) 2.dp else 0.dp,
+                            if (isImportFocused) Color.White else Color.Transparent,
+                            RoundedCornerShape(8.dp)
+                        )
+                        .focusable(),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = CinemaAmber),
+                    border = BorderStroke(1.dp, CinemaAmber.copy(alpha = 0.5f))
+                ) {
+                    Icon(imageVector = Icons.Filled.FileUpload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Импорт")
+                }
+
+                var isFabFocused by remember { mutableStateOf(false) }
+                FloatingActionButton(
+                    onClick = onAdd,
+                    containerColor = CinemaAmber,
+                    contentColor = Color.Black,
+                    modifier = Modifier
+                        .onFocusChanged { isFabFocused = it.isFocused }
+                        .border(
+                            if (isFabFocused) 2.dp else 0.dp,
+                            if (isFabFocused) Color.White else Color.Transparent,
+                            CircleShape
+                        )
+                        .focusable(),
+                    shape = CircleShape
+                ) {
+                    Icon(imageVector = Icons.Filled.Add, contentDescription = "Добавить")
+                }
+            }
+        }
+
+        if (isRefreshing) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = CinemaAmber)
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (playlists.isEmpty()) {
+                    item { PlaylistEmptyState() }
+                }
+
+                items(playlists) { playlist ->
+                    PlaylistCard(
+                        playlist = playlist,
+                        onManage = { onManageChannels(playlist) },
+                        onEdit = { onEdit(playlist) },
+                        onRefresh = { onRefresh(playlist) },
+                        onDelete = { onDelete(playlist) },
+                        viewModel = viewModel
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistEmptyState() {
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Icon(Icons.Filled.PlaylistRemove, null, tint = Color.Gray, modifier = Modifier.size(64.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+        Text("Плейлисты не загружены", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text("Добавьте список (M3U/XML) для начала просмотра", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@Composable
+private fun PlaylistCard(
+    playlist: Playlist,
+    onManage: () -> Unit,
+    onEdit: () -> Unit,
+    onRefresh: () -> Unit,
+    onDelete: () -> Unit,
+    viewModel: AppViewModel
+) {
+    var isCardFocused by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { isCardFocused = it.isFocused }
+            .border(
+                if (isCardFocused) 2.dp else 0.dp,
+                if (isCardFocused) Color.White else Color.Transparent,
+                RoundedCornerShape(16.dp)
+            )
+            .focusable(),
+        colors = CardDefaults.cardColors(containerColor = if (isCardFocused) SlateFocus else SlateCard),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                imageVector = if (playlist.type == "m3u") Icons.Filled.FeaturedPlayList else Icons.Filled.Code,
+                contentDescription = null,
+                tint = if (playlist.isBuiltIn) CinemaAmber else SkyBlue,
+                modifier = Modifier.size(36.dp)
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(playlist.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(playlist.url, color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                var fm by remember { mutableStateOf(false) }
+                IconButton(onClick = onManage, modifier = Modifier.onFocusChanged { fm = it.isFocused }.background(if (fm) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
+                    Icon(Icons.Filled.List, null, tint = if (fm) CinemaAmber else SkyBlue)
+                }
+                var fe by remember { mutableStateOf(false) }
+                IconButton(onClick = onEdit, modifier = Modifier.onFocusChanged { fe = it.isFocused }.background(if (fe) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
+                    Icon(Icons.Filled.Edit, null, tint = if (fe) Color.White else CinemaAmber)
+                }
+                var fr by remember { mutableStateOf(false) }
+                IconButton(onClick = onRefresh, modifier = Modifier.onFocusChanged { fr = it.isFocused }.background(if (fr) Color.White.copy(alpha = 0.1f) else Color.Transparent, CircleShape).focusable()) {
+                    Icon(Icons.Filled.Refresh, null, tint = if (fr) CinemaAmber else Color.White)
+                }
+                if (!playlist.isBuiltIn) {
+                    var fd by remember { mutableStateOf(false) }
+                    IconButton(onClick = onDelete, modifier = Modifier.onFocusChanged { fd = it.isFocused }.background(if (fd) LiveRed.copy(alpha = 0.2f) else Color.Transparent, CircleShape).focusable()) {
+                        Icon(Icons.Filled.Delete, null, tint = if (fd) Color.White else LiveRed)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgSourcesContent(
+    sources: List<EpgSource>,
+    isRefreshing: Boolean,
+    onAdd: () -> Unit,
+    onRefresh: () -> Unit,
+    onDelete: (EpgSource) -> Unit,
+    onToggle: (EpgSource, Boolean) -> Unit
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(text = "EPG Сервисы", color = Color.White, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(text = "Источники для программы передач (XMLTV)", color = Color.White.copy(alpha = 0.6f), style = MaterialTheme.typography.bodySmall)
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                var isRfFocused by remember { mutableStateOf(false) }
+                IconButton(onClick = onRefresh, modifier = Modifier.onFocusChanged { isRfFocused = it.isFocused }.border(if (isRfFocused) 2.dp else 0.dp, Color.White, CircleShape).focusable()) {
+                    Icon(Icons.Filled.Refresh, null, tint = CinemaAmber)
+                }
+
+                var isFabFocused by remember { mutableStateOf(false) }
+                FloatingActionButton(
+                    onClick = onAdd,
+                    containerColor = CinemaAmber,
+                    contentColor = Color.Black,
+                    modifier = Modifier.onFocusChanged { isFabFocused = it.isFocused }.border(if (isFabFocused) 2.dp else 0.dp, Color.White, CircleShape).focusable(),
+                    shape = CircleShape
+                ) {
+                    Icon(Icons.Filled.Add, null)
+                }
+            }
+        }
+
+        if (isRefreshing) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = CinemaAmber)
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (sources.isEmpty()) {
+                    item {
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 48.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Filled.RssFeed, null, tint = Color.Gray, modifier = Modifier.size(64.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("EPG не настроен", color = Color.White, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("Добавьте URL XMLTV источника для получения программы", color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+
+                items(sources) { source ->
+                    EpgSourceCard(source, onDelete = { onDelete(source) }, onToggle = { onToggle(source, it) })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgSourceCard(source: EpgSource, onDelete: () -> Unit, onToggle: (Boolean) -> Unit) {
+    var isFocused by remember { mutableStateOf(false) }
+    Card(
+        modifier = Modifier.fillMaxWidth().onFocusChanged { isFocused = it.isFocused }.border(if (isFocused) 2.dp else 0.dp, Color.White, RoundedCornerShape(16.dp)).focusable(),
+        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else SlateCard),
+        shape = RoundedCornerShape(16.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Filled.Language, null, tint = SkyBlue, modifier = Modifier.size(36.dp))
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(source.name, color = Color.White, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                Text(source.url, color = Color.White.copy(alpha = 0.5f), style = MaterialTheme.typography.bodySmall, maxLines = 1)
+            }
+            Switch(checked = source.isActive, onCheckedChange = onToggle, colors = SwitchDefaults.colors(checkedThumbColor = CinemaAmber))
+            Spacer(modifier = Modifier.width(8.dp))
+            var fd by remember { mutableStateOf(false) }
+            IconButton(onClick = onDelete, modifier = Modifier.onFocusChanged { fd = it.isFocused }.background(if (fd) LiveRed.copy(alpha = 0.2f) else Color.Transparent, CircleShape).focusable()) {
+                Icon(Icons.Filled.Delete, null, tint = if (fd) Color.White else LiveRed)
+            }
+        }
     }
 }
