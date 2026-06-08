@@ -2,6 +2,7 @@ package com.example.ui.screens
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.components.glassmorphism
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
@@ -629,6 +631,18 @@ fun PlaylistsScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            // Lock/Unlock Button
+                                            IconButton(
+                                                onClick = { viewModel.toggleChannelLock(channel) }
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (channel.isLocked) Icons.Default.Lock else Icons.Default.LockOpen,
+                                                    contentDescription = "Блокировка",
+                                                    tint = if (channel.isLocked) LiveRed else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+
                                             // Edit Button
                                             IconButton(
                                                 onClick = {
@@ -998,11 +1012,16 @@ private fun PlaylistCard(
     viewModel: AppViewModel
 ) {
     var isCardFocused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(targetValue = if (isCardFocused) 1.02f else 1.0f, label = "focusScale")
     val backgroundColor = MaterialTheme.colorScheme.surface
     val highlightColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            }
             .onFocusChanged { isCardFocused = it.isFocused }
             .border(
                 if (isCardFocused) 2.dp else 0.dp,

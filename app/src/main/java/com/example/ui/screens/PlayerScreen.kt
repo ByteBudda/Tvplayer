@@ -26,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import com.example.ui.components.glassmorphism
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
@@ -481,10 +482,15 @@ private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean,
             LazyVerticalGrid(columns = GridCells.Adaptive(160.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(channels) { ch ->
                     var isItemFocused by remember { mutableStateOf(false) }
+                    val scale by animateFloatAsState(targetValue = if (isItemFocused) 1.05f else 1.0f, label = "focusScale")
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(80.dp)
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
                             .onFocusChanged { isItemFocused = it.isFocused }
                             .clickable { viewModel.selectChannel(ch); onChannels(false) }
                             .focusable()
