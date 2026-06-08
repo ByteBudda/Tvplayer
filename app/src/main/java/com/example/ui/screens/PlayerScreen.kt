@@ -26,6 +26,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.example.ui.components.glassmorphism
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
@@ -309,9 +310,17 @@ private fun ArchiveBanner(viewModel: AppViewModel) {
 private fun EPGSpoiler(selectedChannel: Channel?, archiveSchedule: List<ProgramEpisode>, isExpanded: Boolean, onToggle: (Boolean) -> Unit, viewModel: AppViewModel) {
     var isFocused by remember { mutableStateOf(false) }
     Card(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).onFocusChanged { isFocused = it.isFocused }.focusable(),
-        colors = CardDefaults.cardColors(containerColor = if (isFocused) SlateFocus else MaterialTheme.colorScheme.surface),
-        border = BorderStroke(if (isFocused) 2.dp else 1.dp, if (isFocused) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp)
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .glassmorphism(
+                shape = RoundedCornerShape(16.dp),
+                backgroundColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+            ),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
     ) {
         Column {
             Row(
@@ -374,7 +383,19 @@ private fun CategorySelector(categories: List<String>, selected: String, viewMod
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: Boolean, unlocked: Boolean, viewModel: AppViewModel, onPin: (Channel) -> Unit) {
-    LazyColumn(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 16.dp)) {
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .glassmorphism(
+                shape = RoundedCornerShape(16.dp),
+                backgroundColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
+                borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+            ),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(16.dp)
+    ) {
         items(channels) { channel ->
             val isSel = selected?.id == channel.id
             var isFoc by remember { mutableStateOf(false) }
@@ -382,12 +403,16 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
             val highlightColor = if (isDark) SlateFocus else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
             
             Card(
-                modifier = Modifier.fillMaxWidth().onFocusChanged { isFoc = it.isFocused }.combinedClickable(
-                    onClick = { if (channel.isLocked && parental && !unlocked) onPin(channel) else viewModel.selectChannel(channel) },
-                    onLongClick = { viewModel.toggleChannelLock(channel) }
-                ).focusable(),
-                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) highlightColor else MaterialTheme.colorScheme.surface),
-                border = BorderStroke(2.dp, if (isFoc) MaterialTheme.colorScheme.onSurface else if (isSel) CinemaAmber else Color.Transparent)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { isFoc = it.isFocused }
+                    .combinedClickable(
+                        onClick = { if (channel.isLocked && parental && !unlocked) onPin(channel) else viewModel.selectChannel(channel) },
+                        onLongClick = { viewModel.toggleChannelLock(channel) }
+                    )
+                    .focusable(),
+                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) highlightColor else Color.Transparent),
+                border = BorderStroke(2.dp, if (isFoc) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f) else if (isSel) CinemaAmber else Color.Transparent)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
@@ -408,7 +433,18 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
 @Composable
 private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean, selected: Channel?, episodes: List<ProgramEpisode>, channels: List<Channel>, onEpg: (Boolean) -> Unit, onChannels: (Boolean) -> Unit, viewModel: AppViewModel) {
     AnimatedVisibility(visible = showEpg, enter = slideInVertically { -it }, exit = slideOutVertically { -it }) {
-        Box(modifier = Modifier.fillMaxWidth().height(300.dp).background(Color.Black.copy(alpha = 0.9f)).padding(24.dp).clickable { onEpg(false) }) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .glassmorphism(
+                    shape = RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp),
+                    backgroundColor = Color.Black.copy(alpha = 0.5f),
+                    borderColor = Color.White.copy(alpha = 0.1f)
+                )
+                .padding(24.dp)
+                .clickable { onEpg(false) }
+        ) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(episodes) { ep ->
                     var isItemFocused by remember { mutableStateOf(false) }
@@ -432,7 +468,16 @@ private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean,
         }
     }
     AnimatedVisibility(visible = showChannels, enter = slideInVertically { it }, exit = slideOutVertically { it }, modifier = Modifier.align(Alignment.BottomCenter)) {
-        Box(modifier = Modifier.fillMaxWidth().height(400.dp).background(Color.Black.copy(alpha = 0.9f)).padding(16.dp)) {
+        Box(                
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(400.dp)
+                .glassmorphism(
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    backgroundColor = Color.Black.copy(alpha = 0.5f),
+                    borderColor = Color.White.copy(alpha = 0.1f)
+                )
+                .padding(16.dp)) {
             LazyVerticalGrid(columns = GridCells.Adaptive(160.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(channels) { ch ->
                     var isItemFocused by remember { mutableStateOf(false) }
@@ -442,7 +487,7 @@ private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean,
                             .clickable { viewModel.selectChannel(ch); onChannels(false) }
                             .focusable(),
                         colors = CardDefaults.cardColors(
-                            containerColor = if (isItemFocused) CinemaAmber else SlateCard
+                            containerColor = if (isItemFocused) CinemaAmber else Color.Transparent
                         ),
                         border = if (isItemFocused) BorderStroke(2.dp, Color.White) else null
                     ) {
