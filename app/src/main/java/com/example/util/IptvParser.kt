@@ -225,7 +225,7 @@ object IptvParser {
                                         val stopTimeStr = if (stopMs > 0) timeFormat.format(stopMs) else "--:--"
 
                                         val currentTime = System.currentTimeMillis()
-                                        val calendar = java.util.Calendar.getInstance()
+                                        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("GMT+3"))
                                         calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
                                         calendar.set(java.util.Calendar.MINUTE, 0)
                                         calendar.set(java.util.Calendar.SECOND, 0)
