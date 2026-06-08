@@ -378,12 +378,15 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
         items(channels) { channel ->
             val isSel = selected?.id == channel.id
             var isFoc by remember { mutableStateOf(false) }
+            val isDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val highlightColor = if (isDark) SlateFocus else MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+            
             Card(
                 modifier = Modifier.fillMaxWidth().onFocusChanged { isFoc = it.isFocused }.combinedClickable(
                     onClick = { if (channel.isLocked && parental && !unlocked) onPin(channel) else viewModel.selectChannel(channel) },
                     onLongClick = { viewModel.toggleChannelLock(channel) }
                 ).focusable(),
-                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) SlateFocus else MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) highlightColor else MaterialTheme.colorScheme.surface),
                 border = BorderStroke(2.dp, if (isFoc) MaterialTheme.colorScheme.onSurface else if (isSel) CinemaAmber else Color.Transparent)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -391,7 +394,7 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
                         AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(4.dp))
                     }
                     Spacer(Modifier.width(12.dp))
-                    Text(channel.name, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(channel.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (channel.isLocked) Icon(Icons.Default.Lock, contentDescription = null, tint = LiveRed, modifier = Modifier.size(16.dp))
                     IconButton(onClick = { viewModel.toggleFavorite(channel) }) {
                         Icon(if (channel.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = null, tint = CinemaAmber)
