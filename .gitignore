@@ -20,3 +20,6 @@ local.properties
 !debug.keystore.base64
 !.build-outputs/
 !.build-outputs/**
+!/apk/
+!/apk/**
+

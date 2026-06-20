@@ -124,3 +124,20 @@ dependencies {
   "ksp"(libs.androidx.room.compiler)
   "ksp"(libs.moshi.kotlin.codegen)
 }
+
+tasks.register<Copy>("copyApkToApkFolder") {
+  from(layout.buildDirectory.dir("outputs/apk"))
+  into(rootProject.layout.projectDirectory.dir("apk"))
+  include("**/*.apk")
+  eachFile {
+    path = name
+  }
+  includeEmptyDirs = false
+}
+
+tasks.configureEach {
+  if (name.startsWith("assemble")) {
+    finalizedBy("copyApkToApkFolder")
+  }
+}
+
