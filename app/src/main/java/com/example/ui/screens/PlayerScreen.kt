@@ -529,14 +529,14 @@ private fun BoxScope.FullscreenOverlays(
         Box(                
             modifier = Modifier
                 .fillMaxWidth()
-                .height(400.dp)
+                .height(300.dp)
                 .glassmorphism(
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     backgroundColor = Color.Black.copy(alpha = 0.5f),
                     borderColor = Color.White.copy(alpha = 0.1f)
                 )
-                .padding(16.dp)) {
-            LazyVerticalGrid(columns = GridCells.Adaptive(160.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                .padding(12.dp)) {
+            LazyVerticalGrid(columns = GridCells.Adaptive(110.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 itemsIndexed(channels) { index, ch ->
                     var isItemFocused by remember { mutableStateOf(false) }
                     val isSelected = selected?.id == ch.id
@@ -544,7 +544,7 @@ private fun BoxScope.FullscreenOverlays(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(80.dp)
+                            .height(48.dp)
                             .then(if (isSelected || (selected == null && index == 0)) Modifier.focusRequester(channelsGridFocusRequester) else Modifier)
                             .graphicsLayer {
                                 scaleX = scale
@@ -563,18 +563,19 @@ private fun BoxScope.FullscreenOverlays(
                         ),
                         border = if (isItemFocused) BorderStroke(2.dp, Color.White) else null
                     ) {
-                        Row(modifier = Modifier.padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                                AsyncImage(model = ch.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(4.dp))
+                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                                AsyncImage(model = ch.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(2.dp))
                             }
-                            Spacer(Modifier.width(8.dp))
+                            Spacer(Modifier.width(6.dp))
                             Text(
                                 ch.name, 
                                 color = Color.White, 
                                 modifier = Modifier.weight(1f), 
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                fontWeight = FontWeight.Bold
+                                fontWeight = FontWeight.SemiBold,
+                                style = MaterialTheme.typography.labelMedium
                             )
                         }
                     }
