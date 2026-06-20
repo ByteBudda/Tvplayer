@@ -94,9 +94,15 @@ fun VideoPlayer(
             val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context.applicationContext)
                 .setExtensionRendererMode(androidx.media3.exoplayer.DefaultRenderersFactory.EXTENSION_RENDERER_MODE_ON)
             
+            val audioAttributes = androidx.media3.common.AudioAttributes.Builder()
+                .setContentType(androidx.media3.common.C.AUDIO_CONTENT_TYPE_MOVIE)
+                .setUsage(androidx.media3.common.C.USAGE_MEDIA)
+                .build()
+
             ExoPlayer.Builder(context.applicationContext, renderersFactory)
                 .build()
                 .apply {
+                    setAudioAttributes(audioAttributes, true)
                     playWhenReady = true
                     repeatMode = Player.REPEAT_MODE_OFF
                 }
