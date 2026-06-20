@@ -125,14 +125,31 @@ dependencies {
   "ksp"(libs.moshi.kotlin.codegen)
 }
 
-tasks.register<Copy>("copyApkToApkFolder") {
-  from(layout.buildDirectory.dir("outputs/apk"))
-  into(rootProject.layout.projectDirectory.dir("apk"))
-  include("**/*.apk")
-  eachFile {
-    path = name
+val buildDirOutputsApk = layout.buildDirectory.dir("outputs/apk")
+val rootProjectApkDir = rootProject.layout.projectDirectory.dir("apk")
+
+tasks.register("copyApkToApkFolder") {
+  val srcDirProvider = buildDirOutputsApk
+  val destDirProvider = rootProjectApkDir
+  
+  inputs.dir(srcDirProvider)
+  outputs.dir(destDirProvider)
+
+  doLast {
+    val srcDir = srcDirProvider.get().asFile
+    val destDir = destDirProvider.asFile
+    if (!destDir.exists()) {
+      destDir.mkdirs()
+    }
+    logger.lifecycle("Searching for APKs in: ${srcDir.absolutePath}")
+    srcDir.walkTopDown().forEach { file ->
+      if (file.isFile && file.extension == "apk") {
+        val destFile = File(destDir, file.name)
+        file.copyTo(destFile, overwrite = true)
+        logger.lifecycle("SUCCESS: Directly copied APK ${file.name} to ${destFile.absolutePath} (Size: ${destFile.length()} bytes)")
+      }
+    }
   }
-  includeEmptyDirs = false
 }
 
 tasks.configureEach {
