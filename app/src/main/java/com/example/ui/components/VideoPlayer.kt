@@ -8,6 +8,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import java.io.File
 import androidx.compose.foundation.clickable
@@ -166,7 +167,29 @@ fun VideoPlayer(
             showControls = false
         }
         if (!showControls && isFullscreen) {
-            focusRequester.requestFocus()
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                Log.e("VideoPlayer", "Error requesting focus", e)
+            }
+        }
+    }
+
+    val controlsFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(showControls) {
+        if (showControls) {
+            try {
+                controlsFocusRequester.requestFocus()
+            } catch (e: Exception) {
+                Log.e("VideoPlayer", "Failed to focus controls", e)
+            }
+        } else {
+            try {
+                focusRequester.requestFocus()
+            } catch (e: Exception) {
+                Log.e("VideoPlayer", "Failed to focus player", e)
+            }
         }
     }
 
@@ -522,13 +545,15 @@ fun VideoPlayer(
                                 var isPlayFocused by remember { mutableStateOf(false) }
                                 IconButton(
                                     onClick = {
-                                        exoPlayer.let { player ->
+                                        exoPlayer?.let { player ->
                                             if (player.isPlaying) player.pause() else player.play()
                                         }
                                     },
                                     modifier = Modifier
                                         .onFocusChanged { isPlayFocused = it.isFocused }
+                                        .focusRequester(controlsFocusRequester)
                                         .background(if (isPlayFocused) Color.White else CinemaAmber, CircleShape)
+                                        .border(if (isPlayFocused) BorderStroke(3.dp, Color.Black) else BorderStroke(0.dp, Color.Transparent), CircleShape)
                                         .size(58.dp)
                                         .focusable()
                                 ) {

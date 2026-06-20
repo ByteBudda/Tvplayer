@@ -15,4 +15,8 @@
 .cxx
 local.properties
 .env
-debug.keystore
+
+!debug.keystore
+!debug.keystore.base64
+!.build-outputs/
+!.build-outputs/**

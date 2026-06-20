@@ -18,6 +18,10 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -77,6 +81,25 @@ fun PlayerScreen(
     var showFullscreenEpg by remember { mutableStateOf(false) }
     var showFullscreenChannels by remember { mutableStateOf(false) }
     var isEpgExpanded by remember { mutableStateOf(false) }
+
+    val epgListFocusRequester = remember { FocusRequester() }
+    val channelsGridFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(showFullscreenEpg) {
+        if (showFullscreenEpg) {
+            try {
+                epgListFocusRequester.requestFocus()
+            } catch (e: Exception) {}
+        }
+    }
+
+    LaunchedEffect(showFullscreenChannels) {
+        if (showFullscreenChannels) {
+            try {
+                channelsGridFocusRequester.requestFocus()
+            } catch (e: Exception) {}
+        }
+    }
 
     LaunchedEffect(isFullscreen) {
         viewModel.setFullscreen(isFullscreen)
@@ -247,7 +270,18 @@ fun PlayerScreen(
         }
 
         if (isFullscreen) {
-            FullscreenOverlays(showFullscreenEpg, showFullscreenChannels, selectedChannel, archiveSchedule, filteredChannels, { showFullscreenEpg = it }, { showFullscreenChannels = it }, viewModel)
+            FullscreenOverlays(
+                showEpg = showFullscreenEpg,
+                showChannels = showFullscreenChannels,
+                selected = selectedChannel,
+                episodes = archiveSchedule,
+                channels = filteredChannels,
+                onEpg = { showFullscreenEpg = it },
+                onChannels = { showFullscreenChannels = it },
+                viewModel = viewModel,
+                epgListFocusRequester = epgListFocusRequester,
+                channelsGridFocusRequester = channelsGridFocusRequester
+            )
         }
 
         if (showPinDialogForChannel != null) {
@@ -413,7 +447,7 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
                     )
                     .focusable(),
                 colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) highlightColor else Color.Transparent),
-                border = BorderStroke(2.dp, if (isFoc) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f) else if (isSel) CinemaAmber else Color.Transparent)
+                border = BorderStroke(if (isFoc) 3.dp else 2.dp, if (isFoc) CinemaAmber else if (isSel) CinemaAmber.copy(alpha = 0.4f) else Color.Transparent)
             ) {
                 Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
@@ -422,8 +456,19 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
                     Spacer(Modifier.width(12.dp))
                     Text(channel.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (channel.isLocked) Icon(Icons.Default.Lock, contentDescription = null, tint = LiveRed, modifier = Modifier.size(16.dp))
-                    IconButton(onClick = { viewModel.toggleFavorite(channel) }) {
-                        Icon(if (channel.isFavorite) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = null, tint = CinemaAmber)
+                    var isStarFocused by remember { mutableStateOf(false) }
+                    IconButton(
+                        onClick = { viewModel.toggleFavorite(channel) },
+                        modifier = Modifier
+                            .onFocusChanged { isStarFocused = it.isFocused }
+                            .background(if (isStarFocused) CinemaAmber.copy(alpha = 0.2f) else Color.Transparent, CircleShape)
+                            .focusable()
+                    ) {
+                        Icon(
+                            if (channel.isFavorite) Icons.Default.Star else Icons.Default.StarBorder,
+                            contentDescription = "Избранное",
+                            tint = CinemaAmber
+                        )
                     }
                 }
             }
@@ -432,7 +477,18 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
 }
 
 @Composable
-private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean, selected: Channel?, episodes: List<ProgramEpisode>, channels: List<Channel>, onEpg: (Boolean) -> Unit, onChannels: (Boolean) -> Unit, viewModel: AppViewModel) {
+private fun BoxScope.FullscreenOverlays(
+    showEpg: Boolean,
+    showChannels: Boolean,
+    selected: Channel?,
+    episodes: List<ProgramEpisode>,
+    channels: List<Channel>,
+    onEpg: (Boolean) -> Unit,
+    onChannels: (Boolean) -> Unit,
+    viewModel: AppViewModel,
+    epgListFocusRequester: FocusRequester,
+    channelsGridFocusRequester: FocusRequester
+) {
     AnimatedVisibility(visible = showEpg, enter = slideInVertically { -it }, exit = slideOutVertically { -it }) {
         Box(
             modifier = Modifier
@@ -447,11 +503,12 @@ private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean,
                 .clickable { onEpg(false) }
         ) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(episodes) { ep ->
+                itemsIndexed(episodes) { index, ep ->
                     var isItemFocused by remember { mutableStateOf(false) }
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .then(if (index == 0) Modifier.focusRequester(epgListFocusRequester) else Modifier)
                             .onFocusChanged { isItemFocused = it.isFocused }
                             .clickable(enabled = ep.isArchive) { viewModel.selectArchiveEpisode(ep) }
                             .focusable(),
@@ -480,13 +537,15 @@ private fun BoxScope.FullscreenOverlays(showEpg: Boolean, showChannels: Boolean,
                 )
                 .padding(16.dp)) {
             LazyVerticalGrid(columns = GridCells.Adaptive(160.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(channels) { ch ->
+                itemsIndexed(channels) { index, ch ->
                     var isItemFocused by remember { mutableStateOf(false) }
+                    val isSelected = selected?.id == ch.id
                     val scale by animateFloatAsState(targetValue = if (isItemFocused) 1.05f else 1.0f, label = "focusScale")
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(80.dp)
+                            .then(if (isSelected || (selected == null && index == 0)) Modifier.focusRequester(channelsGridFocusRequester) else Modifier)
                             .graphicsLayer {
                                 scaleX = scale
                                 scaleY = scale
