@@ -428,8 +428,8 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
                 backgroundColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f),
                 borderColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
             ),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        contentPadding = PaddingValues(16.dp)
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        contentPadding = PaddingValues(8.dp)
     ) {
         items(channels) { channel ->
             val isSel = selected?.id == channel.id
@@ -449,11 +449,11 @@ private fun ChannelsList(channels: List<Channel>, selected: Channel?, parental: 
                 colors = CardDefaults.cardColors(containerColor = if (isSel || isFoc) highlightColor else Color.Transparent),
                 border = BorderStroke(if (isFoc) 3.dp else 2.dp, if (isFoc) CinemaAmber else if (isSel) CinemaAmber.copy(alpha = 0.4f) else Color.Transparent)
             ) {
-                Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
-                        AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(4.dp))
+                Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)), contentAlignment = Alignment.Center) {
+                        AsyncImage(model = channel.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(2.dp))
                     }
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(8.dp))
                     Text(channel.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (channel.isLocked) Icon(Icons.Default.Lock, contentDescription = null, tint = LiveRed, modifier = Modifier.size(16.dp))
                     var isStarFocused by remember { mutableStateOf(false) }
@@ -536,7 +536,7 @@ private fun BoxScope.FullscreenOverlays(
                     borderColor = Color.White.copy(alpha = 0.1f)
                 )
                 .padding(12.dp)) {
-            LazyVerticalGrid(columns = GridCells.Adaptive(110.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            LazyVerticalGrid(columns = GridCells.Adaptive(95.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 itemsIndexed(channels) { index, ch ->
                     var isItemFocused by remember { mutableStateOf(false) }
                     val isSelected = selected?.id == ch.id
@@ -544,7 +544,7 @@ private fun BoxScope.FullscreenOverlays(
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .height(38.dp)
                             .then(if (isSelected || (selected == null && index == 0)) Modifier.focusRequester(channelsGridFocusRequester) else Modifier)
                             .graphicsLayer {
                                 scaleX = scale
@@ -563,11 +563,11 @@ private fun BoxScope.FullscreenOverlays(
                         ),
                         border = if (isItemFocused) BorderStroke(2.dp, Color.White) else null
                     ) {
-                        Row(modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Box(modifier = Modifier.size(32.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
-                                AsyncImage(model = ch.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(2.dp))
+                        Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Color.Black.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
+                                AsyncImage(model = ch.logoUrl, contentDescription = null, modifier = Modifier.fillMaxSize().padding(1.dp))
                             }
-                            Spacer(Modifier.width(6.dp))
+                            Spacer(Modifier.width(4.dp))
                             Text(
                                 ch.name, 
                                 color = Color.White, 
@@ -575,7 +575,7 @@ private fun BoxScope.FullscreenOverlays(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.SemiBold,
-                                style = MaterialTheme.typography.labelMedium
+                                style = MaterialTheme.typography.labelSmall
                             )
                         }
                     }

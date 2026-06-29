@@ -441,7 +441,7 @@ fun TvChannelDrawer(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
 
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     items(categories) { category ->
                         val isSel = selectedCategory == category
                         var isFocused by remember { mutableStateOf(false) }
@@ -460,7 +460,7 @@ fun TvChannelDrawer(
                                 .onFocusChanged { isFocused = it.isFocused }
                                 .clickable { onCategorySelect(category) }
                                 .focusable()
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                                .padding(horizontal = 8.dp, vertical = 6.dp)
                         ) {
                             Text(
                                 text = category,
@@ -490,7 +490,7 @@ fun TvChannelDrawer(
                 )
 
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                     modifier = Modifier.fillMaxHeight()
                 ) {
                     itemsIndexed(channels) { index, channel ->
@@ -511,12 +511,12 @@ fun TvChannelDrawer(
                             shape = RoundedCornerShape(8.dp)
                         ) {
                             Row(
-                                modifier = Modifier.padding(8.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(
                                     modifier = Modifier
-                                        .size(32.dp)
+                                        .size(24.dp)
                                         .clip(RoundedCornerShape(6.dp))
                                         .background(Color.Black.copy(alpha = 0.3f)),
                                     contentAlignment = Alignment.Center
@@ -524,11 +524,11 @@ fun TvChannelDrawer(
                                     AsyncImage(
                                         model = channel.logoUrl,
                                         contentDescription = channel.name,
-                                        modifier = Modifier.fillMaxSize().padding(2.dp)
+                                        modifier = Modifier.fillMaxSize().padding(1.dp)
                                     )
                                 }
 
-                                Spacer(modifier = Modifier.width(10.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
 
                                 Text(
                                     text = channel.name,

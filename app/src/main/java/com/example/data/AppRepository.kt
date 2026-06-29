@@ -30,10 +30,13 @@ class AppRepository(
     val categories: Flow<List<String>> = appDao.getAllCategoriesFlow()
     val epgSources: Flow<List<EpgSource>> = appDao.getAllEpgSourcesFlow()
 
-    // In-memory EPG cache
-    // private val epgCache = mutableMapOf<String, List<ProgramEpisode>>()
+    // Thread-safe in-memory EPG cache
+    private val epgCache = java.util.concurrent.ConcurrentHashMap<String, List<ProgramEpisode>>()
+    @Volatile
+    private var isEpgCacheLoaded = false
 
     suspend fun refreshEpg() = withContext(Dispatchers.IO) {
+        isEpgCacheLoaded = false
         val sources = appDao.getAllEpgSources().filter { it.isActive }
         
         sources.forEach { source ->
@@ -153,6 +156,7 @@ class AppRepository(
     }
 
     suspend fun refreshPlaylist(playlistId: Long) = withContext(Dispatchers.IO) {
+        isEpgCacheLoaded = false
         val playlists = appDao.getAllPlaylists()
         val playlist = playlists.find { it.id == playlistId } ?: return@withContext
 
@@ -377,30 +381,119 @@ class AppRepository(
     }
 
     // --- EPG / ARCHIVE SCHEDULE FETCHING ---
-    suspend fun fetchChannelArchiveSchedule(channel: Channel): List<ProgramEpisode> = withContext(Dispatchers.IO) {
-        // Find EPG files and parse for channel
+    private suspend fun preloadEpgCache() = withContext(Dispatchers.IO) {
+        epgCache.clear()
         val epgDir = context.cacheDir
         val epgFiles = epgDir.listFiles { file -> file.name.startsWith("epg_") && file.name.endsWith(".xml") } ?: emptyArray()
 
         for (file in epgFiles) {
             try {
-                // Parse this file for the channel
-                val episodes = file.inputStream().use { inputStream ->
-                    IptvParser.parseEpgForChannel(inputStream, channel.tvgId ?: channel.name)
-                }
-                if (episodes.isNotEmpty()) {
-                    return@withContext episodes
+                Log.d("Repository", "Preloading EPG file: ${file.name}")
+                file.inputStream().use { inputStream ->
+                    val result = IptvParser.parseXml(0L, inputStream)
+                    result.programs.forEach { (channelId, episodes) ->
+                        if (episodes.isNotEmpty()) {
+                            epgCache[channelId] = episodes
+                            epgCache[channelId.lowercase()] = episodes
+                        }
+                    }
+                    result.channelIdToName.forEach { (channelId, displayName) ->
+                        val episodes = result.programs[channelId]
+                        if (episodes != null && episodes.isNotEmpty()) {
+                            epgCache[displayName] = episodes
+                            epgCache[displayName.lowercase()] = episodes
+                        }
+                    }
                 }
             } catch (e: Exception) {
-                Log.e("Repository", "Error parsing ${file.name}", e)
+                Log.e("Repository", "Error preloading EPG file ${file.name}", e)
             }
         }
+        isEpgCacheLoaded = true
+    }
+
+    fun getCurrentEpisodeForChannel(channel: Channel): ProgramEpisode? {
+        val episodes = epgCache[channel.tvgId ?: ""]
+            ?: epgCache[channel.tvgId?.lowercase() ?: ""]
+            ?: epgCache[channel.tvgName ?: ""]
+            ?: epgCache[channel.tvgName?.lowercase() ?: ""]
+            ?: epgCache[channel.name]
+            ?: epgCache[channel.name.lowercase()]
+
+        val currentTime = System.currentTimeMillis()
+        if (episodes != null && episodes.isNotEmpty()) {
+            return episodes.find { currentTime >= it.startTimeMs && currentTime <= it.endTimeMs }
+        }
+        
+        // If no cached, let's generate a quick synchronous fallback current episode
+        val oneHourMs = 3600000L
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault()).apply {
+            timeZone = java.util.TimeZone.getTimeZone("GMT+3")
+        }
+        
+        // Find current hour interval
+        val calendar = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("GMT+3"))
+        val hour = calendar.get(java.util.Calendar.HOUR_OF_DAY)
+        val startMs = calendar.apply {
+            set(java.util.Calendar.MINUTE, 0)
+            set(java.util.Calendar.SECOND, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }.timeInMillis
+        val stopMs = startMs + oneHourMs
+
+        val channelHash = channel.name.hashCode().let { if (it < 0) -it else it }
+        val titlesMap = mapOf(
+            "Спорт" to listOf("Спортивный обзор", "Новости спорта", "Легенды", "Live Трансляция", "Аналитика"),
+            "Фильмы" to listOf("Кино на вечер", "Мировой прокат", "Шедевры кино", "Сериал дня", "Актерская судьба"),
+            "Познавательные" to listOf("Дикая природа", "Загадки", "Научный подход", "Технологии", "История"),
+            "Новости" to listOf("Главные новости", "События часа", "Репортаж", "Экономика сегодня", "Интервью"),
+            "Детские" to listOf("Мультфильмы", "Утреннее шоу", "Веселые уроки", "Сказка на ночь", "Приключения"),
+            "Музыка" to listOf("Хит-парад", "Живой звук", "Ретро коллекция", "Топ-10", "Новые имена")
+        )
+        val defaultTitles = listOf("Программа передач", "Популярное шоу", "В эфире", "Интересное кино", "Музыкальный блок")
+        val categoryTitles = titlesMap[channel.category] ?: defaultTitles
+        val titleIdx = (hour + channelHash) % categoryTitles.size
+        val title = categoryTitles[titleIdx]
+
+        return ProgramEpisode(
+            title = title,
+            description = "Программа в эфире",
+            startTimeString = sdf.format(startMs),
+            endTimeString = sdf.format(stopMs),
+            startTimeMs = startMs,
+            endTimeMs = stopMs,
+            isArchive = false
+        )
+    }
+
+    suspend fun fetchChannelArchiveSchedule(channel: Channel): List<ProgramEpisode> = withContext(Dispatchers.IO) {
+        if (!isEpgCacheLoaded) {
+            preloadEpgCache()
+        }
+
+        // Try looking up by tvgId
+        channel.tvgId?.let { tvgId ->
+            val cached = epgCache[tvgId] ?: epgCache[tvgId.lowercase()]
+            if (cached != null && cached.isNotEmpty()) return@withContext cached
+        }
+
+        // Try looking up by tvgName
+        channel.tvgName?.let { tvgName ->
+            val cached = epgCache[tvgName] ?: epgCache[tvgName.lowercase()]
+            if (cached != null && cached.isNotEmpty()) return@withContext cached
+        }
+
+        // Try looking up by channel name
+        val cached = epgCache[channel.name] ?: epgCache[channel.name.lowercase()]
+        if (cached != null && cached.isNotEmpty()) return@withContext cached
 
         // Fallback to pseudo-realistic generated data if no real EPG found
         val list = mutableListOf<ProgramEpisode>()
         val currentTime = System.currentTimeMillis()
         val oneHourMs = 3600000L
-        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val sdf = SimpleDateFormat("HH:mm", Locale.getDefault()).apply {
+            timeZone = java.util.TimeZone.getTimeZone("GMT+3")
+        }
         
         // Use hash of channel name to generate consistent but different titles for different channels
         val channelHash = channel.name.hashCode().let { if (it < 0) -it else it }

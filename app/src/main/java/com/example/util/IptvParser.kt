@@ -137,6 +137,8 @@ object IptvParser {
             var progChannelId: String? = null
             var progTitle: String? = null
             var progDesc: String? = null
+            var xmltvChannelId: String? = null
+            var xmltvDisplayName: String? = null
 
             // Simple XML playlist variables
             var chName: String? = null
@@ -145,8 +147,12 @@ object IptvParser {
             var chCat: String? = null
 
             // Date format for XMLTV: "20191027130000 +0300"
-            val xmltvDateFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
-            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            val xmltvDateFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("GMT+3")
+            }
+            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("GMT+3")
+            }
 
             while (eventType != XmlPullParser.END_DOCUMENT) {
                 when (eventType) {
@@ -162,12 +168,17 @@ object IptvParser {
                                 progDesc = null
                             }
                             "channel" -> {
-                                // In XMLTV, channel has an id attribute
                                 val id = parser.getAttributeValue(null, "id")
                                 if (id != null) {
-                                    // We'll use chName variable to store display-name later in TEXT event
-                                    progChannelId = id 
+                                    // XMLTV channel
+                                    xmltvChannelId = id
+                                    xmltvDisplayName = null
+                                } else {
+                                    // Custom XML playlist channel
                                     chName = null
+                                    chUrl = null
+                                    chLogo = null
+                                    chCat = null
                                 }
                             }
                             // XML Playlist tags (supports <channel>, <item>, etc.)
@@ -184,12 +195,12 @@ object IptvParser {
                         if (text.isNotEmpty() && currentTagName != null) {
                             when (currentTagName) {
                                 // XMLTV elements
+                                "display-name" -> xmltvDisplayName = text
                                 "title" -> progTitle = text
                                 "desc" -> progDesc = text
-                                "display-name" -> chName = text
                                 
                                 // Simple XML Playlist elements
-                                "name", "title" -> if (progChannelId == null) chName = text
+                                "name", "title" -> chName = text
                                 "url", "stream", "link" -> chUrl = text
                                 "logo", "image", "pic" -> chLogo = text
                                 "category", "genre" -> chCat = text
@@ -200,13 +211,13 @@ object IptvParser {
                         val tagAtEnd = parser.name
                         when (tagAtEnd) {
                             "channel", "item" -> {
-                                if (progChannelId != null && chName != null && chUrl == null) {
-                                    // XMLTV channel definition: <channel id="..."><display-name>...</display-name></channel>
-                                    epgChannelNames[progChannelId!!] = chName!!
-                                    progChannelId = null
-                                    chName = null
+                                if (xmltvChannelId != null && xmltvDisplayName != null) {
+                                    // XMLTV channel definition
+                                    epgChannelNames[xmltvChannelId!!] = xmltvDisplayName!!
+                                    xmltvChannelId = null
+                                    xmltvDisplayName = null
                                 } else if (chName != null && chUrl != null && channels.size < 3000) {
-                                    // Custom XML playlist channel: <channel><name>...</name><url>...</url></channel>
+                                    // Custom XML playlist channel
                                     channels.add(
                                         Channel(
                                             playlistId = playlistId,
@@ -294,8 +305,12 @@ object IptvParser {
             var progTitle: String? = null
             var progDesc: String? = null
 
-            val xmltvDateFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
-            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
+            val xmltvDateFormat = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("GMT+3")
+            }
+            val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault()).apply {
+                timeZone = TimeZone.getTimeZone("GMT+3")
+            }
             
             val currentTime = System.currentTimeMillis()
             // Using the same timezone logic for consistency
@@ -378,7 +393,9 @@ object IptvParser {
             // Fallback for dates without timezone: 20240101000000
             try {
                 if (dateStr.length >= 14) {
-                    val fallback = SimpleDateFormat("yyyyMMddHHmmss", Locale.US)
+                    val fallback = SimpleDateFormat("yyyyMMddHHmmss", Locale.US).apply {
+                        timeZone = TimeZone.getTimeZone("GMT+3")
+                    }
                     fallback.parse(dateStr.substring(0, 14))?.time ?: 0L
                 } else 0L
             } catch (e2: Exception) {
